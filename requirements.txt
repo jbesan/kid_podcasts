@@ -1,0 +1,4 @@
+google-genai
+pydub
+pytest
+python-dotenv

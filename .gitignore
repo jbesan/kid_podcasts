@@ -1,0 +1,9 @@
+.env
+.agents/
+__pycache__/
+.pytest_cache/
+venv/
+podcasts/
+.DS_Store
+context.txt
+history.md
