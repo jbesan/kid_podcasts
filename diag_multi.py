@@ -1,7 +1,8 @@
 import os
+
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
 load_dotenv(override=True)
 api_key = os.getenv("GOOGLE_API_KEY")
@@ -16,14 +17,14 @@ multi_speaker_config = types.MultiSpeakerVoiceConfig(
             speaker="Sophie",
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Kore")
-            )
+            ),
         ),
         types.SpeakerVoiceConfig(
             speaker="Marc",
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Algieba")
-            )
-        )
+            ),
+        ),
     ]
 )
 
@@ -43,18 +44,31 @@ try:
             response_modalities=["AUDIO"],
             speech_config=types.SpeechConfig(
                 multi_speaker_voice_config=multi_speaker_config
-            )
-        )
+            ),
+        ),
     )
-    
+
     print("Success!")
-    data = response.candidates[0].content.parts[0].inline_data.data
-    if data:
-        with open("diag_multi_confusion_check.pcm", "wb") as f:
-            f.write(data)
-        print(f"Audio saved to diag_multi_confusion_check.pcm ({len(data)} bytes)")
+    if (
+        response.candidates
+        and response.candidates[0].content
+        and response.candidates[0].content.parts
+    ):
+        part = response.candidates[0].content.parts[0]
+        if hasattr(part, "inline_data") and part.inline_data:
+            data = part.inline_data.data
+            if data:
+                with open("diag_multi_confusion_check.pcm", "wb") as f:
+                    f.write(data)
+                print(
+                    f"Audio saved to diag_multi_confusion_check.pcm ({len(data)} bytes)"
+                )
+            else:
+                print("Audio data was empty.")
+        else:
+            print("Part has no inline_data.")
     else:
-        print("No audio data found.")
+        print("No audio content found in response candidates.")
 
 except Exception as e:
     print(f"Error: {e}")

@@ -1,0 +1,37 @@
+[project]
+name = "kid-podcasts"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Jacques B.", email = "jbesancon@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "audioop-lts>=0.2.2",
+    "google-genai>=1.73.1",
+    "pydantic>=2.13.2",
+    "pydub>=0.25.1",
+    "python-dotenv>=1.2.2",
+    "streamlit>=1.56.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.11",
+    "ty>=0.0.31",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "SIM", "TID"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# tool.ty configuration removed to use defaults
