@@ -728,5 +728,6 @@ class PodcastGenerator:
             counter += 1
 
         combined_audio += AudioSegment.silent(duration=5000)
-        combined_audio.export(output_path, format="mp3")
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, lambda: combined_audio.export(output_path, format="mp3"))
         return output_path, usage
