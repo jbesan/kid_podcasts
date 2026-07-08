@@ -1,16 +1,16 @@
-# Kids Podcast Generator V1
+# Kids Podcast Generator V2 (NiceGUI Edition)
 
-A professional-grade, specialized podcast generator for kids, powered by the latest Gemini 3.0 and 2.5 models.
+A professional-grade, specialized podcast generator for kids, powered by the latest Gemini 3.5 and 2.5 models, using a modern NiceGUI-based reactive user interface.
 
 ## 🚀 Features
 
-- **Gemini 3.0 Flash Preview**: High-quality script generation with deep educational content, storytelling, and bilingual pedagogy.
-- **Gemini 2.5 Flash TTS**: Real-time, expressive audio synthesis with natural language steering (Sophie & Marc/Algieba).
-- **Batch Synthesis**: Automated sequential generation of multiple podcasts with smart rate limiting (10 RPM).
-- **Fragments & Async**: High-responsiveness architecture using `@st.fragment` and `asyncio.gather`. Synthesis for one card is non-blocking and isolated.
-- **Robustness**: Smart async retry mechanism with exponential backoff and `retryDelay` parsing to handle API rate limits without freezing the UI.
+- **Gemini 3.5 Pro**: High-quality script generation with deep educational content, storytelling, and bilingual pedagogy.
+- **Gemini 2.5 Flash / Pro TTS**: Real-time, expressive audio synthesis with natural language steering.
+- **Batch Synthesis**: Automated sequential generation of multiple podcasts with smart rate limiting.
+- **Non-Blocking UI**: Asynchronous event handlers using NiceGUI and background execution, ensuring the UI remains perfectly fluid.
+- **Parameters Isolation**: Every podcast episode is encapsulated in its own Pydantic `PodcastEpisode` model, ensuring configuration parameters (category, topic, age, models) are fully isolated from UI state changes.
 - **Granular Costing**: Episode-centric cost breakdown (Transcript vs. Audio) displayed directly on each card.
-- **Dynamic Interface**: A clean Streamlit layout with a configuration sidebar for API Key and model selection synced via session state.
+- **Dynamic Interface**: A premium card-based layout featuring expanders, loading spinners, and audio players.
 
 ## 🛠️ Setup
 
@@ -30,7 +30,7 @@ A professional-grade, specialized podcast generator for kids, powered by the lat
 
 3. **Run the App**:
    ```bash
-   uv run streamlit run app.py
+   uv run python main.py
    ```
 
 ## 📐 Astral Development Workflow
@@ -50,12 +50,12 @@ This project is fully compatible with **Python 3.13**. To resolve the removal of
 
 ## 📐 Architecture
 
-- **Fragment-First UI**: Individual podcast cards update independently without full-page reruns.
-- **Async Engine**: Uses `google.genai.Client.aio` and `asyncio.sleep` for non-blocking I/O.
-- **Double-Pass Batching**: Both script generation and audio synthesis use `asyncio.gather` for parallel processing.
-- **Text Generation**: Supports multiple models (e.g., `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`) to handle logic, tone, and duration constraints.
-- **Audio Generation**: Supports specialized TTS models (e.g., `gemini-2.5-flash-preview-tts`) for high-fidelity voices with natural language instructions.
-- **Model Steering**: Optimized using standardized English steering tags (`[excited]`, `[curious]`, `[short pause]`) for professional delivery.
+- **Centralized Reactive State**: Central state (`AppState` and `PodcastEpisode` models) automatically syncs with NiceGUI components.
+- **Async Engine**: Uses `google.genai.Client.aio` for non-blocking I/O operations.
+- **Double-Pass Batching**: Generates script and audio in separate sequential steps per episode.
+- **Text Generation**: Uses `gemini-3.5-pro` for deep reasoning, structuring, and script writing.
+- **Audio Generation**: Supports specialized TTS voice configurations.
+
 
 ## 📝 Usage
 

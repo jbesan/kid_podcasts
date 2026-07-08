@@ -17,7 +17,7 @@ def test_app_state_add_script():
     state.add_script(script, cost=0.005)
 
     assert len(state.scripts) == 1
-    assert state.scripts[0]["items"] == script
+    assert state.scripts[0].items == script
     assert state.total_session_cost == 0.005
 
 
@@ -72,6 +72,12 @@ def test_app_state_hydrate_history():
             "duration_seconds": 120.0,
             "audio_path": "podcasts/test_1.mp3",
             "theme": "L'espace",
+            "category": "Histoire",
+            "shared_context": "Un enfant curieux",
+            "duration_val": 5,
+            "age_val": 6,
+            "transcript_model": "gemini-2.5-flash",
+            "tts_model": "gemini-2.5-flash-tts",
         },
         {
             "items": [],
@@ -90,13 +96,23 @@ def test_app_state_hydrate_history():
     assert state.total_session_cost == 0.006
 
     # Test completed episode hydration
-    assert state.scripts[0]["status"] == "Prêt"
-    assert state.scripts[0]["progress"] == 1.0
-    assert state.scripts[0]["duration_seconds"] == 120.0
-    assert state.scripts[0]["theme"] == "L'espace"
+    assert state.scripts[0].status == "Prêt"
+    assert state.scripts[0].progress == 1.0
+    assert state.scripts[0].duration_seconds == 120.0
+    assert state.scripts[0].theme == "L'espace"
+    assert state.scripts[0].category == "Histoire"
+    assert state.scripts[0].shared_context == "Un enfant curieux"
+    assert state.scripts[0].duration_val == 5
+    assert state.scripts[0].age_val == 6
+    assert state.scripts[0].transcript_model == "gemini-2.5-flash"
+    assert state.scripts[0].tts_model == "gemini-2.5-flash-tts"
     assert state.audio_ready["L'espace"] == "podcasts/test_1.mp3"
 
-    # Test active task auto-correction to error
-    assert state.scripts[1]["status"] == "Erreur"
-    assert state.scripts[1]["progress"] == 0.0
-    assert state.scripts[1]["theme"] == "Les dinosaures"
+    # Test active task auto-correction to error and default settings restoration
+    assert state.scripts[1].status == "Erreur"
+    assert state.scripts[1].progress == 0.0
+    assert state.scripts[1].theme == "Les dinosaures"
+    assert state.scripts[1].category == "Kids Podcast"
+    assert state.scripts[1].shared_context == ""
+    assert state.scripts[1].duration_val == 7
+    assert state.scripts[1].age_val == 7

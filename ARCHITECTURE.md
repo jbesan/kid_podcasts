@@ -11,9 +11,9 @@ This application follows a modern **event-driven architecture** built with **Nic
 - **Multi-Speaker TTS**: Uses Gemini's `MultiSpeakerVoiceConfig` to generate full conversations in a single pass.
 
 ### 2. NiceGUI App (`main.py`)
-- **Reactive State (`models/state.py`)**: A centralized `AppState` manages all reactive data (scripts, audio paths, costs).
+- **Reactive State (`models/state.py`)**: A centralized `AppState` manages all reactive data. Each episode is represented by a dedicated Pydantic `PodcastEpisode` model class, ensuring complete isolation of its generation parameters (category, topic, duration, age, models) against parallel UI changes.
 - **Per-Connection Scoping**: State and Generator are scoped within the `@ui.page("/")` function, ensuring independent sessions for every browser tab.
-- **Class-Based Components**: Each podcast episode is managed by a `PodcastCard` class instance, encapsulating its own loading state and audio player.
+- **Class-Based Components**: Each podcast episode is managed by a `PodcastCard` class instance, which binds directly to its corresponding `PodcastEpisode` object to render the current progress, status, cost, and audio player.
 - **Async Concurrency**: 
     - **Non-Blocking UI**: Event handlers are `async`, allowing the FastAPI event loop to remain responsive.
     - **I/O Offloading**: Blocking operations (like Pydub exports) are offloaded to background threads.

@@ -7,7 +7,7 @@ from typing import Any
 from dotenv import load_dotenv
 from nicegui import Client, app, ui
 
-from models.state import AppState
+from models.state import AppState, PodcastEpisode
 from podcast_generator import PodcastGenerator
 from utils.cost_calculator import calculate_cost
 
@@ -36,14 +36,14 @@ class PodcastCard(ui.card):
     def __init__(
         self,
         index: int,
-        script_data: dict,
+        episode: PodcastEpisode,
         app_state: AppState,
         gen: list[PodcastGenerator | None],
-        retry_fn: Callable[[dict, "PodcastCard"], Any] | None = None,
+        retry_fn: Callable[[PodcastEpisode, "PodcastCard"], Any] | None = None,
     ):
         super().__init__()
         self.index = index
-        self.script_data = script_data
+        self.episode = episode
         self.state = app_state
         self.generator = gen
         self.retry_fn = retry_fn
@@ -56,13 +56,13 @@ class PodcastCard(ui.card):
 
     def _render_content(self) -> None:
         """Constructs the UI elements for the podcast card."""
-        status = self.script_data.get("status", "Unknown")
-        theme = self.script_data.get("theme", f"Episode {self.index + 1}")
-        category = self.script_data.get("category", "Kids Podcast")
-        cost = self.script_data.get("cost", 0.0)
-        progress = self.script_data.get("progress", 0.0)
-        duration = self.script_data.get("duration_seconds", 0.0)
-        audio_path = self.script_data.get("audio_path")
+        status = self.episode.status
+        theme = self.episode.theme
+        category = self.episode.category
+        cost = self.episode.cost
+        progress = self.episode.progress
+        duration = self.episode.duration_seconds
+        audio_path = self.episode.audio_path
 
         # Color mapping for status badges
         badge_colors = {
@@ -138,7 +138,7 @@ class PodcastCard(ui.card):
                     retry = self.retry_fn
                     if retry:
                         ui.button(
-                            "Réessayer", on_click=lambda: retry(self.script_data, self)
+                            "Réessayer", on_click=lambda: retry(self.episode, self)
                         ).props("flat color=primary icon=refresh").classes("text-xs")
 
     def refresh(self) -> None:
@@ -431,22 +431,23 @@ async def main_page(client: Client):
 
         def save_history() -> None:
             try:
-                app.storage.user["history"] = state.scripts
+                serialized = [s.model_dump() for s in state.scripts]
+                app.storage.user["history"] = serialized
                 with client:
                     ui.run_javascript(
-                        f"localStorage.setItem('kids_podcast_history', {json.dumps(json.dumps(state.scripts))})"
+                        f"localStorage.setItem('kids_podcast_history', {json.dumps(json.dumps(serialized))})"
                     )
             except Exception as e:
                 logger.warning("Failed to save history: %s", e)
 
-        async def run_pipeline(script_data: dict, card: PodcastCard) -> None:
+        async def run_pipeline(episode: PodcastEpisode, card: PodcastCard) -> None:
             async with sem:
-                theme = script_data["theme"]
+                theme = episode.theme
                 logger.info(
                     "Starting podcast generation pipeline for subject: '%s'", theme
                 )
-                script_data["status"] = "Génération du script"
-                script_data["progress"] = 0.25
+                episode.status = "Génération du script"
+                episode.progress = 0.25
                 with client:
                     card.refresh()
                     save_history()
@@ -461,23 +462,23 @@ async def main_page(client: Client):
                         "Step 1/3: Requesting script generation for '%s'...", theme
                     )
                     items, usage = await gen_instance.generate_script(
-                        context=state.shared_context,
-                        category=state.current_category,
+                        context=episode.shared_context,
+                        category=episode.category,
                         theme=theme,
-                        duration=state.duration_val,
-                        age=state.age_val,
-                        model_id=state.transcript_model,
+                        duration=episode.duration_val,
+                        age=episode.age_val,
+                        model_id=episode.transcript_model,
                     )
 
                     cost_info = calculate_cost(
                         tokens_in_text=usage["prompt_tokens"],
                         tokens_out_text=usage["candidates_tokens"],
                         audio_duration_seconds=0,
-                        text_model=state.transcript_model,
-                        tts_model=state.tts_model,
+                        text_model=episode.transcript_model,
+                        tts_model=episode.tts_model,
                     )
-                    script_data["items"] = items
-                    script_data["cost"] = cost_info["total_cost"]
+                    episode.items = items
+                    episode.cost = cost_info["total_cost"]
                     state.total_session_cost += cost_info["total_cost"]
                     logger.info(
                         "Step 1/3 completed: Script successfully generated for '%s'. Cost: %.6f$",
@@ -489,8 +490,8 @@ async def main_page(client: Client):
                     logger.info(
                         "Step 2/3: Starting TTS voice synthesis for '%s'...", theme
                     )
-                    script_data["status"] = "Synthèse audio"
-                    script_data["progress"] = 0.75
+                    episode.status = "Synthèse audio"
+                    episode.progress = 0.75
                     with client:
                         card.refresh()
                         save_history()
@@ -501,31 +502,31 @@ async def main_page(client: Client):
                         audio_usage,
                     ) = await gen_instance.generate_podcast_audio(
                         items,
-                        category=state.current_category,
+                        category=episode.category,
                         theme=theme,
-                        model_id=state.tts_model,
+                        model_id=episode.tts_model,
                     )
 
                     audio_cost_info = calculate_cost(
                         tokens_in_text=0,
                         tokens_out_text=0,
                         audio_duration_seconds=duration_seconds,
-                        text_model=state.transcript_model,
-                        tts_model=state.tts_model,
+                        text_model=episode.transcript_model,
+                        tts_model=episode.tts_model,
                         audio_in_tokens=audio_usage["prompt_tokens"],
                         audio_out_tokens=audio_usage["candidates_tokens"],
                     )
 
                     # 3. Finalize
-                    script_data["audio_path"] = path
-                    script_data["duration_seconds"] = duration_seconds
-                    script_data["cost"] += audio_cost_info["total_cost"]
+                    episode.audio_path = path
+                    episode.duration_seconds = duration_seconds
+                    episode.cost += audio_cost_info["total_cost"]
                     state.total_session_cost += audio_cost_info["total_cost"]
 
                     state.audio_ready[str(theme)] = path
 
-                    script_data["status"] = "Prêt"
-                    script_data["progress"] = 1.0
+                    episode.status = "Prêt"
+                    episode.progress = 1.0
                     logger.info(
                         "Step 3/3 completed: Audio synthesis ready. File saved at '%s'. Cost: %.6f$",
                         path,
@@ -534,7 +535,7 @@ async def main_page(client: Client):
                     logger.info(
                         "Generation pipeline finished successfully for '%s'. Total cost: %.6f$, Duration: %.2fs",
                         theme,
-                        script_data["cost"],
+                        episode.cost,
                         duration_seconds,
                     )
                     with client:
@@ -545,8 +546,8 @@ async def main_page(client: Client):
                 except Exception as e:
                     logger.error("Pipeline failed for theme '%s': %s", theme, e)
                     logger.exception(e)
-                    script_data["status"] = "Erreur"
-                    script_data["progress"] = 0.0
+                    episode.status = "Erreur"
+                    episode.progress = 0.0
                     with client:
                         card.refresh()
                         save_history()
@@ -555,13 +556,13 @@ async def main_page(client: Client):
                             type="negative",
                         )
 
-        async def retry_pipeline(script_data: dict, card: PodcastCard) -> None:
-            script_data["status"] = "En attente"
-            script_data["progress"] = 0.0
+        async def retry_pipeline(episode: PodcastEpisode, card: PodcastCard) -> None:
+            episode.status = "En attente"
+            episode.progress = 0.0
             with client:
                 card.refresh()
                 save_history()
-            asyncio.create_task(run_pipeline(script_data, card))
+            asyncio.create_task(run_pipeline(episode, card))
 
         async def generate_scripts():
             if not theme_input.value:
@@ -587,16 +588,15 @@ async def main_page(client: Client):
 
             # 1. Create Placeholder Card (En attente)
             placeholder_index = len(state.scripts)
-            podcast_item = {
-                "items": [],
-                "cost": 0.0,
-                "status": "En attente",
-                "progress": 0.0,
-                "duration_seconds": 0.0,
-                "audio_path": None,
-                "theme": theme,
-                "category": state.current_category,
-            }
+            podcast_item = PodcastEpisode(
+                theme=theme,
+                category=state.current_category,
+                shared_context=state.shared_context,
+                duration_val=state.duration_val,
+                age_val=state.age_val,
+                transcript_model=state.transcript_model,
+                tts_model=state.tts_model,
+            )
             state.scripts.append(podcast_item)
             save_history()
 

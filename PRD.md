@@ -8,12 +8,12 @@ Provide a premium, modern, and structured user interface for the Kids Podcast Ge
 - Fix functional bugs (TTS cost tracking, missing download button).
 
 ## 2. Success Criteria
-- [ ] **Modern Aesthetic**: UI uses a curated color palette (Quasar primary/secondary), glassmorphism effects, and consistent spacing.
-- [ ] **Clean Workspace**: API Keys and Model pickers are relegated to a "Settings" modal.
-- [ ] **Prominent Context**: "Kids Context" is integrated into the main configuration area, not hidden in a sidebar button.
-- [ ] **Interactive Cards**: Episode cards are compact by default, with expandable script editors and clear action buttons.
-- [ ] **Downloadable Content**: Each synthesized episode has a clearly visible "Download MP3" button.
-- [ ] **Accurate Cost Tracking**: The total session cost updates in real-time for both script generation and TTS synthesis.
+- [x] **Modern Aesthetic**: UI uses a curated color palette (Quasar primary/secondary), glassmorphism effects, and consistent spacing.
+- [x] **Clean Workspace**: API Keys and Model pickers are relegated to a "Settings" modal.
+- [x] **Prominent Context**: "Kids Context" is integrated into the main configuration area, not hidden in a sidebar button.
+- [x] **Interactive Cards**: Episode cards are compact by default, with expandable script editors and clear action buttons.
+- [x] **Downloadable Content**: Each synthesized episode has a clearly visible "Download MP3" button.
+- [x] **Accurate Cost Tracking**: The total session cost updates in real-time for both script generation and TTS synthesis.
 
 ## 3. User Journeys
 1. **Configuration**: User enters the children's context (e.g., "Max and Julie, love space and dogs") directly in the main view.

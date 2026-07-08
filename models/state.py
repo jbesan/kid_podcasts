@@ -6,13 +6,32 @@ from pydantic import BaseModel, Field
 from config import DEFAULT_TRANSCRIPT_MODEL, DEFAULT_TTS_MODEL
 
 
+class PodcastEpisode(BaseModel):
+    """Represents a single generated podcast episode."""
+
+    theme: str
+    category: str = "Kids Podcast"
+    shared_context: str = ""
+    duration_val: int = 7
+    age_val: int = 7
+    transcript_model: str = DEFAULT_TRANSCRIPT_MODEL
+    tts_model: str = DEFAULT_TTS_MODEL
+
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    cost: float = 0.0
+    status: str = "En attente"
+    progress: float = 0.0
+    duration_seconds: float = 0.0
+    audio_path: str | None = None
+
+
 class AppState(BaseModel):
     """Global application state for NiceGUI."""
 
-    scripts: list[dict[str, Any]] = Field(default_factory=list)
+    scripts: list[PodcastEpisode] = Field(default_factory=list)
     audio_ready: dict[str, str] = Field(
         default_factory=dict
-    )  # Map of index -> audio_path
+    )  # Map of index/theme -> audio_path
     api_key: str = ""
     transcript_model: str = DEFAULT_TRANSCRIPT_MODEL
     tts_model: str = DEFAULT_TTS_MODEL
@@ -26,29 +45,28 @@ class AppState(BaseModel):
         self, script: list[dict[str, Any]], cost: float, status: str = "Script ready"
     ):
         """Adds a new generated script to the list and updates cost."""
-        self.scripts.append(
-            {
-                "items": script,
-                "cost": cost,
-                "status": status,
-                "progress": 1.0
-                if "ready" in status.lower() or "prêt" in status.lower()
-                else 0.25,
-                "duration_seconds": 0.0,
-                "audio_path": None,
-                "theme": f"Episode {len(self.scripts) + 1}",
-            }
+        episode = PodcastEpisode(
+            theme=f"Episode {len(self.scripts) + 1}",
+            items=script,
+            cost=cost,
+            status=status,
+            progress=1.0
+            if "ready" in status.lower() or "prêt" in status.lower()
+            else 0.25,
         )
+        self.scripts.append(episode)
         self.total_session_cost += cost
 
     def set_audio(self, index: int, audio_path: str, cost: float):
         """Sets the audio path for a specific script and updates cost."""
         self.audio_ready[str(index)] = audio_path
         if index < len(self.scripts):
-            self.scripts[index]["audio_path"] = audio_path
-            self.scripts[index]["status"] = "Prêt"
-            self.scripts[index]["progress"] = 1.0
-            self.scripts[index]["cost"] += cost
+            episode = self.scripts[index]
+            episode.audio_path = audio_path
+            episode.status = "Prêt"
+            episode.progress = 1.0
+            episode.cost += cost
+            self.audio_ready[episode.theme] = audio_path
         self.total_session_cost += cost
 
     @classmethod
@@ -134,16 +152,24 @@ class AppState(BaseModel):
                 status = "Erreur"
                 progress = 0.0
 
-            restored_script = {
-                "items": script.get("items", []),
-                "cost": cost,
-                "status": status,
-                "progress": progress,
-                "duration_seconds": script.get("duration_seconds", 0.0),
-                "audio_path": audio_path,
-                "theme": script.get("theme", f"Episode {i + 1}"),
-            }
-            self.scripts.append(restored_script)
+            episode = PodcastEpisode(
+                items=script.get("items", []),
+                cost=cost,
+                status=status,
+                progress=progress,
+                duration_seconds=script.get("duration_seconds", 0.0),
+                audio_path=audio_path,
+                theme=script.get("theme", f"Episode {i + 1}"),
+                category=script.get("category", "Kids Podcast"),
+                shared_context=script.get("shared_context", ""),
+                duration_val=script.get("duration_val", 7),
+                age_val=script.get("age_val", 7),
+                transcript_model=script.get(
+                    "transcript_model", DEFAULT_TRANSCRIPT_MODEL
+                ),
+                tts_model=script.get("tts_model", DEFAULT_TTS_MODEL),
+            )
+            self.scripts.append(episode)
 
             if status == "Prêt" and audio_path:
-                self.audio_ready[str(restored_script["theme"])] = audio_path
+                self.audio_ready[str(episode.theme)] = audio_path
