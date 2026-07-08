@@ -58,6 +58,7 @@ class PodcastCard(ui.card):
         """Constructs the UI elements for the podcast card."""
         status = self.script_data.get("status", "Unknown")
         theme = self.script_data.get("theme", f"Episode {self.index + 1}")
+        category = self.script_data.get("category", "Kids Podcast")
         cost = self.script_data.get("cost", 0.0)
         progress = self.script_data.get("progress", 0.0)
         duration = self.script_data.get("duration_seconds", 0.0)
@@ -86,11 +87,11 @@ class PodcastCard(ui.card):
         with ui.row().classes(
             "w-full items-center justify-between q-pa-md gap-4 flex-wrap sm:flex-nowrap"
         ):
-            # 1. Episode & Title
+            # 1. Category & Title
             with ui.column().classes("gap-0 min-w-[150px]"):
                 ui.label(theme).classes("text-sm font-bold text-slate-800 line-clamp-1")
-                ui.label(f"Episode {self.index + 1}").classes(
-                    "text-[10px] text-slate-400"
+                ui.label(category).classes(
+                    "text-[10px] text-slate-400 uppercase font-semibold tracking-wider"
                 )
 
             # 2. Status Badge & Mini Progress Bar
@@ -594,6 +595,7 @@ async def main_page(client: Client):
                 "duration_seconds": 0.0,
                 "audio_path": None,
                 "theme": theme,
+                "category": state.current_category,
             }
             state.scripts.append(podcast_item)
             save_history()
