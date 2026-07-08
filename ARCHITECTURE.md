@@ -17,7 +17,7 @@ This application follows a modern **event-driven architecture** built with **Nic
 - **Async Concurrency**: 
     - **Non-Blocking UI**: Event handlers are `async`, allowing the FastAPI event loop to remain responsive.
     - **I/O Offloading**: Blocking operations (like Pydub exports) are offloaded to background threads.
-- **Persistent Storage**: Uses `app.storage.user` to persist user preferences across sessions.
+- **Persistent Storage**: Utilizes a highly robust **hybrid storage architecture** to maintain 100% serverless statelessness. Values are read and modified dynamically via **`app.storage.user`** (server-side, per-session dictionary) during active connection cycles, and synced asynchronously to the browser's persistent client-side **`localStorage`** via JavaScript. During container cold starts or scale-to-zero container recycles, the state is gracefully re-hydrated from the user's `localStorage` upon WebSocket connection. This completely avoids WebSocket cookie-write failures while keeping the hosting tier zero-cost and zero-state.
 
 ### 3. Cost Utility (`utils/cost_calculator.py`)
 - **Decoupled Logic**: A standalone utility for precise cost tracking based on actual API `usage_metadata`.
@@ -31,10 +31,10 @@ This application follows a modern **event-driven architecture** built with **Nic
    - The card's internal spinner activates without affecting other cards or the sidebar.
    - `await generator.generate_podcast_audio_async` is called.
    - Upon completion, the `audio_player` component's source is updated, and it becomes visible instantly.
-5. **Media Serving**: Audio files in `podcasts/` are served via `app.add_media_files`, allowing high-performance streaming.
+5. **Media Serving**: Audio files in `podcasts/` are served via `app.add_media_files` in `.wav` format, allowing high-performance browser streaming.
 
 ## Tech Stack
-- **Framework**: NiceGUI (FastAPI + Vue/Quasar)
+- **Framework**: NiceGUI (FastAPI + Quasar + Tailwind)
 - **AI Models**: Google Gemini (via `google-genai` SDK)
-- **Audio Processing**: Pydub (blocking operations offloaded to threads)
+- **Audio Processing**: Pydub (natively exporting WAV files, requiring **zero** external ffmpeg dependencies)
 - **Runtime**: Python 3.13 (managed with `uv`)

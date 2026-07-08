@@ -1,0 +1,37 @@
+# .dockerignore
+# Avoid copying unnecessary files into the Docker build context
+
+# Git & ignored configurations
+.git
+.gitignore
+.gcloudignore
+.dockerignore
+
+# Virtual environments
+.venv
+venv
+env
+
+# Cache files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Local NiceGUI storage & media
+.nicegui
+.env
+podcasts
+history.md
+context.txt
+diag_multi.py
+
+# Agent scripts
+.agents
+.agent
+
+# System files
+.DS_Store

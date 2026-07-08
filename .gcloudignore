@@ -1,0 +1,38 @@
+# .gcloudignore
+# Prevent heavy, sensitive, or redundant files from being uploaded to Cloud Build
+
+# Git directory
+.git/
+.gitignore
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python caching & build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# NiceGUI runtime and local settings
+.nicegui/
+.env
+
+# Application specific local/ephemeral files
+podcasts/
+history.md
+context.txt
+diag_multi.py
+
+# Antigravity agent directories
+.agents/
+.agent/
+
+# OS-specific files
+.DS_Store

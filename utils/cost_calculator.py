@@ -2,11 +2,15 @@
 
 PRICING = {
     "text": {
+        "gemini-3.5-flash": {"in": 0.50, "out": 3.00},
         "gemini-3-flash-preview": {"in": 0.50, "out": 3.00},
         "gemini-3.1-flash-lite-preview": {"in": 0.25, "out": 1.50},
         "gemini-3.1-pro-preview": {"in": 2.00, "out": 12.00},
+        "gemini-2.5-flash": {"in": 0.30, "out": 2.50},
+        "gemini-2.5-pro": {"in": 1.25, "out": 10.00},
         "gemini-2.5-flash-preview": {"in": 0.30, "out": 2.50},
         "gemini-2.5-pro-preview": {"in": 1.25, "out": 10.00},
+        "gemini-2.0-flash": {"in": 0.15, "out": 0.60},
     },
     "tts": {
         "gemini-2.5-flash-preview-tts": {"in": 0.30, "out": 10.00},
@@ -39,11 +43,9 @@ def calculate_cost(
     Returns:
         A dictionary containing cost breakdown and token counts.
     """
-    text_rates = PRICING["text"].get(
-        text_model, PRICING["text"]["gemini-3-flash-preview"]
-    )
+    text_rates = PRICING["text"].get(text_model, PRICING["text"]["gemini-2.5-pro"])
     tts_rates = PRICING["tts"].get(
-        tts_model, PRICING["tts"]["gemini-2.5-flash-preview-tts"]
+        tts_model, PRICING["tts"]["gemini-2.5-pro-preview-tts"]
     )
 
     # 1. Transcript Cost

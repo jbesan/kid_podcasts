@@ -40,7 +40,7 @@ def test_calculate_cost_defaults():
 
 def test_calculate_cost_unknown_model():
     """Test fallback to default model if unknown model provided."""
-    # Should fallback to gemini-3-flash-preview rates
+    # Should fallback to gemini-2.5-pro rates
     res = calculate_cost(
         tokens_in_text=1_000_000,
         tokens_out_text=1_000_000,
@@ -50,4 +50,4 @@ def test_calculate_cost_unknown_model():
         audio_in_tokens=0,
         audio_out_tokens=0,
     )
-    assert res["text_cost"] == 3.5
+    assert res["text_cost"] == 11.25

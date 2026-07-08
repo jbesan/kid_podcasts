@@ -5,6 +5,7 @@ The tone must be premium, similar to a high-quality radio production. This scrip
 
 # Inputs
 
+- Category: {category}
 - Topic: {theme}
 - Duration Goal: {duration} minutes = {word_count} words
 - Target Age: {age} years old
