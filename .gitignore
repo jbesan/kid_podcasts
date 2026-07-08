@@ -8,3 +8,4 @@ podcasts/
 .DS_Store
 context.txt
 history.md
+.nicegui/

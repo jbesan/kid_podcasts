@@ -9,10 +9,10 @@ requires-python = ">=3.13"
 dependencies = [
     "audioop-lts>=0.2.2",
     "google-genai>=1.73.1",
+    "nicegui>=3.10.0",
     "pydantic>=2.13.2",
     "pydub>=0.25.1",
     "python-dotenv>=1.2.2",
-    "streamlit>=1.56.0",
 ]
 
 [dependency-groups]
@@ -35,3 +35,6 @@ quote-style = "double"
 indent-style = "space"
 
 # tool.ty configuration removed to use defaults
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
