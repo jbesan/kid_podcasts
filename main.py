@@ -425,6 +425,33 @@ async def main_page(client: Client):
             ui.label("Generated Episodes").classes("text-h5 font-bold text-slate-700")
             cards_container = ui.column().classes("w-full gap-6")
 
+            # Cards visibility and cumulative lazy loading management
+            visible_count = 5
+            all_cards: list[PodcastCard] = []
+
+            def update_card_visibility() -> None:
+                for idx, card in enumerate(all_cards):
+                    card.visible = idx < visible_count
+                load_more_btn.visible = visible_count < len(all_cards)
+
+            def show_more() -> None:
+                nonlocal visible_count
+                visible_count = min(visible_count + 5, len(all_cards))
+                update_card_visibility()
+
+            # Button for lazy loading
+            with ui.row().classes("w-full justify-center q-mt-md"):
+                load_more_btn = (
+                    ui.button(
+                        "Afficher les 5 précédents",
+                        on_click=show_more,
+                    )
+                    .props("outline color=primary icon=expand_more")
+                    .classes(
+                        "px-6 py-2 rounded-full font-semibold shadow-sm hover:scale-105 transition-all"
+                    )
+                )
+
         import asyncio
 
         sem = asyncio.Semaphore(5)
@@ -608,15 +635,23 @@ async def main_page(client: Client):
                     generator,
                     retry_fn=retry_pipeline,
                 )
-                cards_container.update()
+                # Prepend the new card to the top of the cards container
+                card.move(target_container=cards_container, target_index=0)
+                all_cards.insert(0, card)
+
+            update_card_visibility()
 
             # 2. Launch background pipeline task
             asyncio.create_task(run_pipeline(state.scripts[-1], card))
 
-        # Load existing scripts
+        # Load existing scripts in reverse order (newest first)
         with cards_container:
-            for i, s in enumerate(state.scripts):
-                PodcastCard(i, s, state, generator, retry_fn=retry_pipeline)
+            for i, s in reversed(list(enumerate(state.scripts))):
+                card = PodcastCard(i, s, state, generator, retry_fn=retry_pipeline)
+                all_cards.append(card)
+
+        # Set initial visibility
+        update_card_visibility()
 
 
 # Run the app

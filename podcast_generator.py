@@ -155,17 +155,21 @@ class PodcastGenerator:
         theme: str,
         duration: int,
         age: int,
-        word_count: int = 1000,
+        word_count: int | None = None,
         model_id: str = DEFAULT_TRANSCRIPT_MODEL,
     ) -> tuple[list[dict], dict]:
         """Generates a podcast script using the specified model."""
+        if word_count is None:
+            word_count = duration * 130
+
         logger.info(
-            "Generating script for theme '%s' (category: %s, duration: %d min, age: %d, model: %s)...",
+            "Generating script for theme '%s' (category: %s, duration: %d min, age: %d, model: %s, word_count: %d)...",
             theme,
             category,
             duration,
             age,
             model_id,
+            word_count,
         )
         if os.path.exists(self.prompt_template_path):
             with open(self.prompt_template_path) as f:
