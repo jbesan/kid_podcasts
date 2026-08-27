@@ -399,7 +399,7 @@ async function shareCurrentAudio() {
     alert("Aucun fichier audio à partager.");
     return;
   }
-  const filename = `${state.activeEpisode.category} - ${state.activeEpisode.theme}.wav`;
+  const filename = `${state.activeEpisode.category} - ${state.activeEpisode.theme}.mp3`;
   await shareOrDownloadAudio(state.activeEpisode.audioBlob, filename);
 }
 
@@ -502,7 +502,7 @@ window.playEpisodeFromFeed = (id) => {
 window.shareEpisodeFromFeed = async (id) => {
   const ep = state.episodes.find(e => e.id === id);
   if (ep && ep.audioBlob) {
-    await shareOrDownloadAudio(ep.audioBlob, `${ep.category} - ${ep.theme}.wav`);
+    await shareOrDownloadAudio(ep.audioBlob, `${ep.category} - ${ep.theme}.mp3`);
   }
 };
 

@@ -1,6 +1,6 @@
 // Gemini Client-Side REST API Module for Kids Podcast PWA
 import { buildScriptPrompt, SCRIPT_JSON_SCHEMA, buildTtsPrompt, DEFAULT_TRANSCRIPT_MODEL, DEFAULT_TTS_MODEL } from './prompts.js';
-import { pcmBase64ToWavBlob, getPcmDurationSeconds } from './audio.js';
+import { pcmBase64ToMp3Blob, getPcmDurationSeconds } from './audio.js';
 
 const BASE_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -187,15 +187,15 @@ export async function synthesizePodcastAudio({
     throw new Error("Aucune donnée audio reçue dans la réponse TTS de Gemini.");
   }
 
-  // Convert raw PCM 24kHz Base64 to standard WAV Blob
-  const wavBlob = pcmBase64ToWavBlob(audioBase64, 24000, 1, 16);
+  // Convert raw PCM 24kHz Base64 to lightweight MP3 Blob (with WAV fallback)
+  const mp3Blob = pcmBase64ToMp3Blob(audioBase64, 24000, 128);
   const binaryString = window.atob(audioBase64);
   const durationSeconds = getPcmDurationSeconds(binaryString.length, 24000, 1, 16);
 
   const usageMetadata = data.usageMetadata || {};
 
   return {
-    audioBlob: wavBlob,
+    audioBlob: mp3Blob,
     durationSeconds,
     usage: {
       promptTokens: usageMetadata.promptTokenCount || 0,

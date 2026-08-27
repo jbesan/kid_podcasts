@@ -1,14 +1,55 @@
 // In-Browser Audio Engine for Kids Podcast PWA
-// Converts Gemini TTS raw PCM 24kHz Base64 data into standard playable WAV Blobs
+// Converts Gemini TTS raw PCM 24kHz Base64 data into lightweight MP3 (or standard WAV) Blobs
 
 /**
- * Converts a base64 string of raw PCM 16-bit Little-Endian 24kHz mono audio into a WAV Blob.
+ * Converts a base64 string of raw PCM 16-bit Little-Endian 24kHz mono audio into an MP3 Blob using lamejs.
+ * Falls back to WAV Blob if lamejs is not loaded.
  * 
  * @param {string} base64Data Raw PCM data in base64
  * @param {number} sampleRate Default 24000 Hz
- * @param {number} numChannels Default 1 (Mono)
- * @param {number} bitsPerSample Default 16-bit
- * @returns {Blob} Standard audio/wav Blob
+ * @param {number} bitRate Default 128 kbps (lightweight & high fidelity voice)
+ * @returns {Blob} audio/mp3 Blob (or audio/wav fallback)
+ */
+export function pcmBase64ToMp3Blob(base64Data, sampleRate = 24000, bitRate = 128) {
+  const binaryString = window.atob(base64Data);
+  const pcmBytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    pcmBytes[i] = binaryString.charCodeAt(i);
+  }
+
+  // If lamejs is available, encode directly into MP3
+  if (typeof window !== 'undefined' && window.lamejs) {
+    try {
+      const mp3encoder = new window.lamejs.Mp3Encoder(1, sampleRate, bitRate);
+      const samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength / 2);
+      const sampleBlockSize = 1152;
+      const mp3Data = [];
+
+      for (let i = 0; i < samples.length; i += sampleBlockSize) {
+        const chunk = samples.subarray(i, i + sampleBlockSize);
+        const mp3buf = mp3encoder.encodeBuffer(chunk);
+        if (mp3buf.length > 0) {
+          mp3Data.push(mp3buf);
+        }
+      }
+
+      const mp3buf = mp3encoder.flush();
+      if (mp3buf.length > 0) {
+        mp3Data.push(mp3buf);
+      }
+
+      return new Blob(mp3Data, { type: 'audio/mp3' });
+    } catch (err) {
+      console.warn("lamejs MP3 encoding error, falling back to WAV:", err);
+    }
+  }
+
+  // Fallback to WAV Blob
+  return pcmBase64ToWavBlob(base64Data, sampleRate, 1, 16);
+}
+
+/**
+ * Converts a base64 string of raw PCM 16-bit Little-Endian 24kHz mono audio into a WAV Blob.
  */
 export function pcmBase64ToWavBlob(base64Data, sampleRate = 24000, numChannels = 1, bitsPerSample = 16) {
   const binaryString = window.atob(base64Data);
@@ -43,8 +84,7 @@ export function pcmBase64ToWavBlob(base64Data, sampleRate = 24000, numChannels =
   view.setUint32(40, pcmLength, true);   // Subchunk2Size
 
   // Combine Header + PCM bytes
-  const wavBlob = new Blob([wavHeader, pcmBytes], { type: 'audio/wav' });
-  return wavBlob;
+  return new Blob([wavHeader, pcmBytes], { type: 'audio/wav' });
 }
 
 function writeString(view, offset, string) {
@@ -72,16 +112,17 @@ export function formatTime(seconds) {
 }
 
 /**
- * Downloads or shares the audio file via mobile native share menu.
+ * Downloads or shares the MP3 audio file via mobile native share menu.
  */
-export async function shareOrDownloadAudio(blob, filename = "podcast.wav") {
-  const file = new File([blob], filename, { type: "audio/wav" });
+export async function shareOrDownloadAudio(blob, filename = "podcast.mp3") {
+  const mimeType = blob.type || 'audio/mp3';
+  const file = new File([blob], filename, { type: mimeType });
   
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         files: [file],
-        title: filename.replace(".wav", ""),
+        title: filename.replace(/\.(mp3|wav)$/i, ""),
         text: "Épisode de podcast pour enfants généré avec Kids Podcast Studio !"
       });
       return true;
