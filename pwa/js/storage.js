@@ -14,7 +14,7 @@ export function getSettings() {
     scriptModel: 'gemini-2.5-pro',
     ttsModel: 'gemini-2.5-pro-preview-tts',
     kidsContext: 'Deux enfants curieux et dynamiques. Aiment les découvertes, la nature et les aventures.',
-    targetAge: 7,
+    targetAge: 6,
     duration: 7
   };
 

@@ -10,7 +10,7 @@ let state = {
   activeScreen: 'create',
   category: CATEGORIES[0],
   theme: '',
-  age: 7,
+  age: 6,
   duration: 7,
   isGenerating: false,
   activeEpisode: null,
