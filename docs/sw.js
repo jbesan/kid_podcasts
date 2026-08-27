@@ -1,5 +1,5 @@
 // Service Worker for Kids Podcast PWA
-const CACHE_NAME = 'kid-podcasts-v1';
+const CACHE_NAME = 'kid-podcasts-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

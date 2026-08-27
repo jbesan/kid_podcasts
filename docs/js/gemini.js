@@ -9,60 +9,67 @@ const BASE_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
  */
 async function callGeminiApiWithRetry(model, payload, apiKey, maxRetries = 3) {
   if (!apiKey || apiKey.trim() === "") {
-    throw new Error("Clé API Google AI Studio manquante. Veuillez la renseigner dans les Réglages.");
+    throw new Error("Clé API Google AI Studio manquante. Veuillez la renseigner dans les Réglages ⚙️.");
   }
 
   const url = `${BASE_API_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
   let attempt = 0;
-  let baseDelay = 3000; // 3 seconds
+  let baseDelay = 3000;
+  let lastError = null;
 
   while (attempt < maxRetries) {
+    let response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
-      if (response.ok) {
-        return await response.json();
-      }
-
-      const errorText = await response.text();
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        errorData = { error: { message: errorText } };
-      }
-
-      const status = response.status;
-      const isRateLimit = status === 429 || (errorData.error && errorData.error.status === "RESOURCE_EXHAUSTED");
-      const isTransient = status >= 500 && status <= 504;
-
-      if (!isRateLimit && !isTransient) {
-        const message = errorData?.error?.message || `Erreur API Gemini (${status})`;
-        throw new Error(message);
-      }
-
+    } catch (networkError) {
+      lastError = networkError;
       attempt++;
       if (attempt >= maxRetries) {
-        throw new Error(errorData?.error?.message || `Trop de requêtes (429 / Limite atteinte après ${maxRetries} tentatives).`);
+        throw new Error(`Erreur réseau : impossible de contacter Google Gemini (${networkError.message || networkError})`);
       }
-
-      const waitTime = baseDelay * attempt + Math.random() * 1500;
-      console.warn(`[Gemini API] Quota ou erreur temporaire (${status}). Nouvelle tentative dans ${Math.round(waitTime / 1000)}s...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    } catch (e) {
-      if (attempt >= maxRetries || e.message.includes("Clé API")) {
-        throw e;
-      }
-      attempt++;
       await new Promise((resolve) => setTimeout(resolve, baseDelay * attempt));
+      continue;
     }
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    const errorText = await response.text();
+    let errorData;
+    try {
+      errorData = JSON.parse(errorText);
+    } catch (e) {
+      errorData = { error: { message: errorText } };
+    }
+
+    const status = response.status;
+    const isRateLimit = status === 429 || (errorData.error && errorData.error.status === "RESOURCE_EXHAUSTED");
+    const isTransient = status >= 500 && status <= 504;
+
+    const message = errorData?.error?.message || `Erreur API Gemini (${status})`;
+    lastError = new Error(message);
+
+    // If non-retryable client error (e.g. 400 Bad Request, 401 Invalid Key, 403 Permission Denied / Leaked Key), throw immediately!
+    if (!isRateLimit && !isTransient) {
+      throw lastError;
+    }
+
+    attempt++;
+    if (attempt >= maxRetries) {
+      throw new Error(`Quota ou limite atteinte (${status}) : ${message}`);
+    }
+
+    const waitTime = baseDelay * attempt + Math.random() * 1000;
+    console.warn(`[Gemini API] Retry ${attempt}/${maxRetries} dans ${Math.round(waitTime / 1000)}s... (${status})`);
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
   }
 
-  throw new Error("Échec de la communication avec l'API Gemini après plusieurs tentatives.");
+  throw lastError || new Error("Échec de la communication avec l'API Gemini après plusieurs tentatives.");
 }
 
 /**

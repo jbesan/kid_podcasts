@@ -62,15 +62,15 @@ Return ONLY valid JSON according to schema.`;
 }
 
 export const SCRIPT_JSON_SCHEMA = {
-  type: "object",
+  type: "OBJECT",
   properties: {
     items: {
-      type: "array",
+      type: "ARRAY",
       items: {
-        type: "object",
+        type: "OBJECT",
         properties: {
-          speaker: { type: "string", enum: ["Sophie", "Marc"] },
-          text: { type: "string" }
+          speaker: { type: "STRING" },
+          text: { type: "STRING" }
         },
         required: ["speaker", "text"]
       }
