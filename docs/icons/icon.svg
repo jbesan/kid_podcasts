@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#db2777" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  
+  <!-- Background with rounded corners for app icon -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  
+  <!-- Inner Glass Overlay -->
+  <rect width="512" height="256" rx="112" fill="url(#glowGrad)" />
+
+  <!-- Central Microphone & Audio Waves Icon -->
+  <g transform="translate(106, 96)" filter="url(#shadow)" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Soundwaves Left -->
+    <path d="M40 120 C20 140 20 180 40 200" stroke-width="16" opacity="0.75" />
+    <path d="M10 90 C-15 135 -15 225 10 270" stroke-width="16" opacity="0.45" />
+
+    <!-- Soundwaves Right -->
+    <path d="M260 120 C280 140 280 180 260 200" stroke-width="16" opacity="0.75" />
+    <path d="M290 90 C315 135 315 225 290 270" stroke-width="16" opacity="0.45" />
+
+    <!-- Microphone Capsule -->
+    <rect x="100" y="30" width="100" height="170" rx="50" fill="#ffffff" stroke="none" />
+    
+    <!-- Microphone Stand / Arc -->
+    <path d="M60 140 C60 210 240 210 240 140" fill="none" stroke="#ffffff" stroke-width="22" />
+    
+    <!-- Stand Base -->
+    <line x1="150" y1="215" x2="150" y2="280" stroke="#ffffff" stroke-width="22" />
+    <line x1="100" y1="280" x2="200" y2="280" stroke="#ffffff" stroke-width="22" />
+
+    <!-- Little Star / Magic Sparkle -->
+    <path d="M250 30 Q260 50 280 60 Q260 70 250 90 Q240 70 220 60 Q240 50 250 30 Z" fill="#fbbf24" stroke="none" />
+  </g>
+</svg>
