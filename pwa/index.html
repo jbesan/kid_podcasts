@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#020617">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KidsPodcast">
+  <meta name="robots" content="noindex, nofollow">
+  
+  <title>Kids Podcast Studio</title>
+  
+  <!-- Manifest & Icons -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+
+  <!-- Tailwind & FontAwesome -->
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <style>
+    /* Safe area padding for notch and home bar on iOS */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    @keyframes soundwave {
+      0%, 100% { height: 6px; }
+      50% { height: 28px; }
+    }
+    .wave-bar { animation: soundwave 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased select-none">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-30 px-4 py-3 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+        <i class="fa-solid fa-microphone-lines text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold text-white tracking-tight">Kids Podcast</h1>
+        <p class="text-[10px] text-slate-400 font-medium">Sophie & Marc • PWA</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Session Cost Pill -->
+      <div class="px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-xl flex items-center gap-1 text-xs text-emerald-400 font-mono">
+        <i class="fa-solid fa-coins text-[10px]"></i>
+        <span id="session-cost">0.00$</span>
+      </div>
+      <!-- Settings Button -->
+      <button onclick="openSettings()" class="w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 flex items-center justify-center transition-colors">
+        <i class="fa-solid fa-gear text-xs"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT CONTAINER -->
+  <main class="flex-1 w-full max-w-lg mx-auto p-4 pb-28 space-y-4">
+
+    <!-- ================= SCREEN 1: CREATE ================= -->
+    <section id="screen-create" class="space-y-4">
+
+      <!-- 1. Catégories / Univers (10 Univers) -->
+      <div class="space-y-2">
+        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+          1. Univers
+        </label>
+        <div id="categories-container" class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          <!-- Dynamic categories injected by JS -->
+        </div>
+      </div>
+
+      <!-- 2. Sujet du Podcast -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+          2. Sujet
+        </label>
+        <div class="relative">
+          <input 
+            id="theme-input" 
+            type="text" 
+            placeholder="Ex: Les requins, Le Mont Saint-Michel, Le feu..." 
+            class="w-full bg-slate-900 border border-slate-800 rounded-2xl py-3.5 px-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors shadow-inner"
+          />
+        </div>
+      </div>
+
+      <!-- 3. Âge Cible & Durée (2 colonnes) -->
+      <div class="grid grid-cols-2 gap-3">
+        
+        <!-- Âge Cible -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">🎯 Âge Cible</label>
+            <span id="age-display" class="text-xs font-bold text-indigo-400">7 ans</span>
+          </div>
+          
+          <div class="flex items-center justify-between bg-slate-950 rounded-xl p-1 border border-slate-800/80">
+            <button onclick="adjustAge(-1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-white flex items-center justify-center font-bold text-sm transition-all">
+              -
+            </button>
+            <span id="age-indicator" class="text-xs font-bold text-white font-mono">7 ans</span>
+            <button onclick="adjustAge(1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-white flex items-center justify-center font-bold text-sm transition-all">
+              +
+            </button>
+          </div>
+        </div>
+
+        <!-- Durée -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2">
+          <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">⏱️ Durée</label>
+          
+          <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800/80 justify-between gap-1">
+            <button onclick="setDuration(3, this)" class="dur-btn flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-400 transition-all">3m</button>
+            <button onclick="setDuration(5, this)" class="dur-btn flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-400 transition-all">5m</button>
+            <button onclick="setDuration(7, this)" class="dur-btn flex-1 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm transition-all">7m</button>
+            <button onclick="setDuration(10, this)" class="dur-btn flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-400 transition-all">10m</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 4. Bouton Principal Générer -->
+      <button 
+        id="btn-generate" 
+        onclick="startGeneration()" 
+        class="w-full py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2.5 transition-all transform active:scale-[0.98]">
+        <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+        <span>Générer le Podcast</span>
+      </button>
+
+      <!-- Animation de Génération (Live Progress) -->
+      <div id="progress-card" class="hidden bg-slate-900 border border-indigo-500/40 rounded-3xl p-4 shadow-xl space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-indigo-500 animate-ping"></div>
+            <span id="progress-status" class="text-xs font-bold text-white">Écriture du script pédagogique...</span>
+          </div>
+          <span id="progress-pct" class="text-xs font-mono text-indigo-400 font-bold">20%</span>
+        </div>
+
+        <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+          <div id="progress-bar" class="bg-gradient-to-r from-indigo-500 to-pink-500 h-full rounded-full transition-all duration-300" style="width: 20%"></div>
+        </div>
+        
+        <p id="progress-sub" class="text-[11px] text-slate-400 italic">5 mots d'anglais & structure radio adaptées...</p>
+      </div>
+
+      <!-- Feed des Podcasts Enregistrés -->
+      <div class="pt-3 space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Vos Podcasts</h3>
+          <span class="text-[11px] text-indigo-400 font-medium">Historique hors-ligne</span>
+        </div>
+
+        <div id="episodes-feed" class="space-y-3">
+          <!-- Dynamically loaded episodes -->
+        </div>
+
+        <!-- Empty state placeholder -->
+        <div id="empty-feed" class="p-8 text-center bg-slate-900/50 border border-slate-800/80 rounded-3xl space-y-2">
+          <div class="text-3xl">🎙️</div>
+          <p class="text-xs font-semibold text-slate-300">Aucun podcast généré pour l'instant</p>
+          <p class="text-[11px] text-slate-500">Choisissez un sujet et lancez votre premier épisode !</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ================= SCREEN 2: PLAYER ================= -->
+    <section id="screen-player" class="hidden space-y-4">
+      
+      <!-- Big Player Card -->
+      <div class="bg-gradient-to-b from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 shadow-xl space-y-4">
+        
+        <div class="flex flex-col items-center text-center pt-2">
+          <div id="player-icon" class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 via-orange-500 to-pink-500 flex items-center justify-center text-3xl shadow-xl shadow-orange-500/20 mb-2">
+            🎙️
+          </div>
+          <span id="player-category" class="px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold mb-1">
+            Nature
+          </span>
+          <h2 id="player-title" class="text-base font-extrabold text-white">Sujet de l'histoire</h2>
+          <p id="player-meta" class="text-xs text-slate-400">Sophie & Marc • 7 minutes</p>
+        </div>
+
+        <!-- Waveform visualizer -->
+        <div class="flex items-center justify-center gap-1 py-1">
+          <div class="w-1 bg-indigo-500/40 rounded-full wave-bar" style="animation-delay: 0.1s"></div>
+          <div class="w-1 bg-indigo-500/60 rounded-full wave-bar" style="animation-delay: 0.3s"></div>
+          <div class="w-1 bg-indigo-400 rounded-full wave-bar" style="animation-delay: 0.2s"></div>
+          <div class="w-1 bg-indigo-300 rounded-full wave-bar" style="animation-delay: 0.5s"></div>
+          <div class="w-1 bg-pink-400 rounded-full wave-bar" style="animation-delay: 0.4s"></div>
+          <div class="w-1 bg-purple-400 rounded-full wave-bar" style="animation-delay: 0.6s"></div>
+          <div class="w-1 bg-indigo-400 rounded-full wave-bar" style="animation-delay: 0.2s"></div>
+          <div class="w-1 bg-indigo-500/60 rounded-full wave-bar" style="animation-delay: 0.7s"></div>
+        </div>
+
+        <!-- Seek Timeline -->
+        <div class="space-y-1">
+          <div id="player-progress-track" class="relative w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 cursor-pointer">
+            <div id="player-progress-bar" class="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full w-0"></div>
+          </div>
+          <div class="flex justify-between text-[11px] font-mono text-slate-400">
+            <span id="player-time-current">0:00</span>
+            <span id="player-time-total">0:00</span>
+          </div>
+        </div>
+
+        <!-- Playback Controls -->
+        <div class="flex items-center justify-between px-2 pt-1">
+          <button id="btn-speed" onclick="cycleSpeed()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 text-xs font-mono text-indigo-300 font-bold hover:bg-slate-700 active:scale-95 transition-all">
+            1.0x
+          </button>
+          
+          <button onclick="skipAudio(-15)" class="w-10 h-10 rounded-full text-slate-300 hover:text-white active:scale-95 flex items-center justify-center text-sm transition-all">
+            <i class="fa-solid fa-rotate-left"></i>
+          </button>
+
+          <button id="btn-play-pause" onclick="togglePlayPause()" class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-pink-600 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-600/40 active:scale-95 transition-all">
+            <i class="fa-solid fa-play ml-0.5"></i>
+          </button>
+
+          <button onclick="skipAudio(15)" class="w-10 h-10 rounded-full text-slate-300 hover:text-white active:scale-95 flex items-center justify-center text-sm transition-all">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+
+          <button onclick="shareCurrentAudio()" title="Partager le podcast" class="w-10 h-10 rounded-xl bg-slate-800 text-slate-300 hover:text-white active:scale-95 flex items-center justify-center text-sm transition-all">
+            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Script Dialogue Viewer -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+          <i class="fa-solid fa-align-left text-indigo-400"></i>
+          Dialogue & Mots d'Anglais
+        </h3>
+
+        <div id="script-dialogue-container" class="space-y-2 max-h-60 overflow-y-auto no-scrollbar text-xs">
+          <!-- Dynamic dialogue lines -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- BOTTOM NAVIGATION TABBAR -->
+  <nav class="fixed bottom-0 left-0 right-0 h-16 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 px-8 flex items-center justify-around z-30">
+    <button onclick="switchScreen('create')" id="nav-create" class="flex flex-col items-center gap-1 text-indigo-400">
+      <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+      <span class="text-[10px] font-semibold">Créer</span>
+    </button>
+
+    <button onclick="switchScreen('player')" id="nav-player" class="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-300">
+      <i class="fa-solid fa-circle-play text-sm"></i>
+      <span class="text-[10px] font-semibold">Écouter</span>
+    </button>
+
+    <button onclick="openSettings()" id="nav-settings" class="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-300">
+      <i class="fa-solid fa-sliders text-sm"></i>
+      <span class="text-[10px] font-semibold">Réglages</span>
+    </button>
+  </nav>
+
+  <!-- SETTINGS MODAL DIALOG -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-indigo-400"></i>
+          Réglages & Clé API
+        </h3>
+        <button onclick="closeSettings()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- API Key -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-300">Clé Google AI Studio</label>
+        <input 
+          id="api-key-input" 
+          type="password" 
+          placeholder="AIzaSy..." 
+          class="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+        />
+        <p class="text-[10px] text-slate-500">🔒 Stockée uniquement sur ce téléphone (localStorage).</p>
+      </div>
+
+      <!-- Default Context -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-300">Contexte habituel des enfants</label>
+        <textarea 
+          id="kids-context-input" 
+          rows="3" 
+          placeholder="Ex: Deux enfants de 7 ans, aiment les dinosaures, la mer et la vie en forêt..." 
+          class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none focus:border-indigo-500"
+        ></textarea>
+      </div>
+
+      <!-- Models Selection -->
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase">Script Model</label>
+          <select id="script-model-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none">
+            <option value="gemini-2.5-pro">gemini-2.5-pro (Qualité max)</option>
+            <option value="gemini-3.7-flash">gemini-3.7-flash (Rapide)</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash (Éco)</option>
+          </select>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-slate-400 uppercase">TTS Model</label>
+          <select id="tts-model-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none">
+            <option value="gemini-2.5-pro-preview-tts">gemini-2.5-pro-preview-tts</option>
+            <option value="gemini-2.5-flash-preview-tts">gemini-2.5-flash-preview-tts</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex gap-2 pt-2">
+        <button onclick="saveSettingsFromUI()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-md transition-all">
+          Enregistrer
+        </button>
+        <button onclick="closeSettings()" class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-all">
+          Annuler
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- App Main JavaScript Module -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
