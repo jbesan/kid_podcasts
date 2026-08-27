@@ -1,5 +1,5 @@
-// Service Worker for Kids Podcast PWA
-const CACHE_NAME = 'kid-podcasts-v3';
+// Service Worker for Kids Podcast PWA - Network First Strategy
+const CACHE_NAME = 'kid-podcasts-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -16,10 +16,11 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -33,15 +34,27 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Network-First strategy: Always fetch latest updates from GitHub if online, fallback to cache if offline
 self.addEventListener('fetch', (event) => {
-  // Do not intercept external API calls to Google
   if (event.request.url.includes('googleapis.com') || event.request.url.includes('gstatic.com') || event.request.url.includes('cdnjs.cloudflare.com')) {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).catch(() => caches.match('./index.html'));
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cachedResponse) => {
+          return cachedResponse || caches.match('./index.html');
+        });
+      })
   );
 });
