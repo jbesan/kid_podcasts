@@ -11,7 +11,7 @@ const SETTINGS_KEY = 'kids_podcast_pwa_settings';
 export function getSettings() {
   const defaults = {
     apiKey: '',
-    scriptModel: 'gemini-2.5-pro',
+    scriptModel: 'gemini-3.1-pro-preview',
     ttsModel: 'gemini-2.5-pro-preview-tts',
     kidsContext: 'Deux enfants curieux et dynamiques. Aiment les découvertes, la nature et les aventures.',
     targetAge: 6,

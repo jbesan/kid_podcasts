@@ -1,6 +1,6 @@
 // Prompt templates and configuration for Kids Podcast PWA
 
-export const DEFAULT_TRANSCRIPT_MODEL = "gemini-2.5-pro";
+export const DEFAULT_TRANSCRIPT_MODEL = "gemini-3.1-pro-preview";
 export const DEFAULT_TTS_MODEL = "gemini-2.5-pro-preview-tts";
 
 export const CATEGORIES = [
