@@ -40,6 +40,7 @@ function initDomElements() {
   elements.progressStatus = document.getElementById('progress-status');
   elements.progressSub = document.getElementById('progress-sub');
   elements.progressPct = document.getElementById('progress-pct');
+  elements.progressTimer = document.getElementById('progress-timer');
   elements.episodesFeed = document.getElementById('episodes-feed');
   elements.emptyFeed = document.getElementById('empty-feed');
   
@@ -183,7 +184,27 @@ async function startGeneration() {
   }
 
   state.isGenerating = true;
-  updateGenerationUI(true, "Écriture du script avec Sophie & Marc...", "✨ Structuration pédagogique & intégration de 5 mots d'anglais...", 20);
+  updateGenerationUI(true, "1/2. Écriture du script avec Sophie & Marc...", "✨ Structuration pédagogique & intégration de 5 mots d'anglais...", 15);
+
+  // Keep screen awake during generation so OS doesn't freeze background tasks
+  let wakeLock = null;
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+    } catch (e) {
+      console.warn("WakeLock not available:", e);
+    }
+  }
+
+  // Live timer interval
+  let secondsElapsed = 0;
+  if (elements.progressTimer) elements.progressTimer.innerText = "0:00";
+  const timerInterval = setInterval(() => {
+    secondsElapsed++;
+    if (elements.progressTimer) {
+      elements.progressTimer.innerText = formatTime(secondsElapsed);
+    }
+  }, 1000);
 
   try {
     // 1. Generate Script
@@ -197,7 +218,7 @@ async function startGeneration() {
       model: settings.scriptModel || DEFAULT_TRANSCRIPT_MODEL
     });
 
-    updateGenerationUI(true, "Synthèse vocale Studio...", "🎙️ Enregistrement audio multi-locuteurs (Erinome & Algieba)...", 65);
+    updateGenerationUI(true, "2/2. Synthèse vocale Studio en cours...", "🎙️ Enregistrement audio multi-locuteurs (~2 à 3 min pour un épisode complet)...", 50);
 
     // 2. Synthesize Audio
     const audioResult = await synthesizePodcastAudio({
@@ -206,7 +227,7 @@ async function startGeneration() {
       model: settings.ttsModel || DEFAULT_TTS_MODEL
     });
 
-    updateGenerationUI(true, "Finalisation de l'épisode...", "✨ Assemblage audio et calcul des coûts...", 90);
+    updateGenerationUI(true, "Finalisation de l'épisode...", "✨ Assemblage audio et calcul des coûts...", 95);
 
     // 3. Calculate Cost
     const costData = calculateCost({
@@ -239,6 +260,7 @@ async function startGeneration() {
       status: "Prêt"
     });
 
+    clearInterval(timerInterval);
     updateGenerationUI(false);
     await refreshEpisodesList();
 
@@ -247,10 +269,17 @@ async function startGeneration() {
     switchScreen('player');
 
   } catch (error) {
+    clearInterval(timerInterval);
     console.error("Erreur de génération:", error);
     alert(`Erreur lors de la génération : ${error.message}`);
     updateGenerationUI(false);
   } finally {
+    clearInterval(timerInterval);
+    if (wakeLock) {
+      try {
+        await wakeLock.release();
+      } catch (e) {}
+    }
     state.isGenerating = false;
   }
 }
