@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupVisibilityListener();
   startBatchPolling();
   updateLastPollIndicator();
+  checkAllBatchesStatus(false);
 });
 
 // --- Generation Mode Toggle ---
@@ -760,7 +761,10 @@ function updateLastPollIndicator() {
 
 function startBatchPolling() {
   const jobs = getAllBatchJobs();
-  const hasActive = jobs.some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+  const hasActive = jobs.some(j => {
+    const st = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    return st !== "SUCCEEDED" && st !== "FAILED" && st !== "CANCELLED" && st !== "EXPIRED";
+  });
   if (!hasActive) {
     stopBatchPolling();
     return;
@@ -768,10 +772,15 @@ function startBatchPolling() {
 
   if (batchPollInterval) return; // already active
 
+  console.log("[KidsPodcasts Batch] Starting background polling loop (30s cadence)...");
   batchPollInterval = setInterval(async () => {
     const currentJobs = getAllBatchJobs();
-    const stillActive = currentJobs.some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+    const stillActive = currentJobs.some(j => {
+      const st = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+      return st !== "SUCCEEDED" && st !== "FAILED" && st !== "CANCELLED" && st !== "EXPIRED";
+    });
     if (!stillActive) {
+      console.log("[KidsPodcasts Batch] All batches completed, stopping polling.");
       stopBatchPolling();
       return;
     }
@@ -781,6 +790,7 @@ function startBatchPolling() {
 
 function stopBatchPolling() {
   if (batchPollInterval) {
+    console.log("[KidsPodcasts Batch] Stopping batch polling.");
     clearInterval(batchPollInterval);
     batchPollInterval = null;
   }
@@ -790,8 +800,12 @@ function setupVisibilityListener() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
       const jobs = getAllBatchJobs();
-      const hasActive = jobs.some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+      const hasActive = jobs.some(j => {
+        const st = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+        return st !== "SUCCEEDED" && st !== "FAILED" && st !== "CANCELLED" && st !== "EXPIRED";
+      });
       if (hasActive) {
+        console.log("[KidsPodcasts Batch] App wake-up (tab visible): checking active batches immediately...");
         await checkAllBatchesStatus(false);
         startBatchPolling();
       }
@@ -818,9 +832,10 @@ async function refreshBatchJobsUI() {
     card.className = "bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-md";
 
     const cleanId = job.id.replace('batches/', '');
-    const isDone = job.state === "JOB_STATE_SUCCEEDED";
-    const isFailed = job.state === "JOB_STATE_FAILED" || job.state === "JOB_STATE_CANCELLED";
-    const isRunning = job.state === "JOB_STATE_RUNNING" || job.state === "BATCH_STATE_RUNNING";
+    const st = (job.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    const isDone = st === "SUCCEEDED";
+    const isFailed = st === "FAILED" || st === "CANCELLED" || st === "EXPIRED";
+    const isRunning = st === "RUNNING";
 
     const topicsSummary = job.episodes.map(e => e.theme).join(', ');
 
@@ -863,7 +878,7 @@ async function refreshBatchJobsUI() {
             <span>Vérifier</span>
           </button>
         `}
-        <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 max-w-[170px]" title="Identifiant du batch">
+        <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 max-w-[170px]" title="Identifiant du batch">
           <span class="select-all font-mono text-[10px] text-slate-300 truncate cursor-text select-text">${cleanId}</span>
           <button onclick="window.copyBatchId('${cleanId}', this)" title="Copier l'identifiant" class="text-slate-400 hover:text-indigo-400 p-0.5 text-xs transition-colors shrink-0">
             <i class="fa-regular fa-copy"></i>
@@ -887,17 +902,23 @@ async function checkAllBatchesStatus(manual = false) {
   let updatedCount = 0;
   let newlySucceededCount = 0;
 
+  console.log(`[KidsPodcasts Batch] checkAllBatchesStatus(manual=${manual}). Scanning ${jobs.length} jobs...`);
+
   for (const job of jobs) {
-    if (job.state !== "JOB_STATE_SUCCEEDED" && job.state !== "JOB_STATE_FAILED" && job.state !== "JOB_STATE_CANCELLED") {
+    const currentSt = (job.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    if (currentSt !== "SUCCEEDED" && currentSt !== "FAILED" && currentSt !== "CANCELLED" && currentSt !== "EXPIRED") {
       try {
+        console.log(`[KidsPodcasts Batch] Querying Google API for ${job.id} (current state: ${currentSt})...`);
         const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id });
-        if (res.state !== job.state) {
-          updateBatchJob(job.id, { state: res.state, updatedAt: Date.now() });
+        const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+        if (newSt !== currentSt) {
+          console.log(`[KidsPodcasts Batch] State transition for ${job.id}: ${currentSt} -> ${newSt}`);
+          updateBatchJob(job.id, { state: newSt, updatedAt: Date.now() });
           updatedCount++;
-          if (res.state === "JOB_STATE_SUCCEEDED") newlySucceededCount++;
+          if (newSt === "SUCCEEDED") newlySucceededCount++;
         }
       } catch (e) {
-        console.warn(`Erreur lors de la vérification du batch ${job.id}:`, e);
+        console.warn(`[KidsPodcasts Batch] Erreur vérification ${job.id}:`, e);
       }
     }
   }
@@ -909,7 +930,10 @@ async function checkAllBatchesStatus(manual = false) {
     setTimeout(() => refreshIcon.classList.remove('fa-spin'), 600);
   }
 
-  const remainingActive = getAllBatchJobs().some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+  const remainingActive = getAllBatchJobs().some(j => {
+    const st = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    return st !== "SUCCEEDED" && st !== "FAILED" && st !== "CANCELLED" && st !== "EXPIRED";
+  });
   if (!remainingActive) {
     stopBatchPolling();
   }
@@ -932,18 +956,22 @@ async function checkSingleBatch(jobId, btnElement) {
   if (icon) icon.classList.add('fa-spin');
 
   try {
+    console.log(`[KidsPodcasts Batch] checkSingleBatch clicked for ${jobId}...`);
     const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
-    updateBatchJob(jobId, { state: res.state, updatedAt: Date.now() });
+    const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    console.log(`[KidsPodcasts Batch] Check result for ${jobId}: ${newSt}`, res);
+
+    updateBatchJob(jobId, { state: newSt, updatedAt: Date.now() });
     await refreshBatchJobsUI();
     updateLastPollIndicator();
 
-    if (res.state === "JOB_STATE_SUCCEEDED") {
+    if (newSt === "SUCCEEDED") {
       showToast("🎉 Le batch est terminé et prêt à être récupéré !", "success");
     } else {
-      const displayState = res.state.replace('JOB_STATE_', '').replace('BATCH_STATE_', '');
-      showToast(`Statut actuel du batch : ${displayState}`, "info", 2500);
+      showToast(`Statut actuel du batch : ${newSt}`, "info", 2500);
     }
   } catch (e) {
+    console.error(`[KidsPodcasts Batch] Erreur checkSingleBatch:`, e);
     showToast(`Erreur de vérification : ${e.message}`, "error");
   } finally {
     if (icon) {
@@ -958,22 +986,35 @@ async function retrieveBatch(jobId) {
   const job = jobs.find(j => j.id === jobId);
   if (!job) return;
 
+  console.log(`[KidsPodcasts Batch] retrieveBatch triggered for ${jobId}. Episodes to download: ${job.episodes.length}`);
+
   try {
-    showToast("Récupération et conversion des MP3...", "info", 3000);
+    showToast("Récupération et conversion des MP3...", "info", 4000);
     const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
-    if (checkRes.state !== "JOB_STATE_SUCCEEDED") {
-      showToast(`Ce batch n'est pas encore terminé (${checkRes.state.replace('JOB_STATE_', '')}).`, "warning");
+    const st = (checkRes.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    console.log(`[KidsPodcasts Batch] Verification before retrieve: ${st}`);
+
+    if (st !== "SUCCEEDED") {
+      showToast(`Ce batch n'est pas encore terminé (${st}).`, "warning");
       return;
     }
 
     const results = await fetchBatchJobResults({ apiKey: settings.apiKey, batchData: checkRes.raw });
+    console.log(`[KidsPodcasts Batch] Successfully extracted ${results.length} results from batch.`);
     let savedCount = 0;
 
     for (let i = 0; i < job.episodes.length; i++) {
       const ep = job.episodes[i];
       const res = results.find(r => r.episodeId === ep.id) || results[i];
 
+      console.log(`[KidsPodcasts Batch] Processing episode ${i + 1}/${job.episodes.length}: "${ep.theme}" (${ep.category})...`, {
+        foundResult: Boolean(res),
+        hasAudio: Boolean(res?.audioBase64),
+        audioLength: res?.audioBase64?.length
+      });
+
       if (res && res.audioBase64) {
+        showToast(`Conversion MP3 (${i + 1}/${job.episodes.length}) : ${ep.theme}...`, "info", 2000);
         const mp3Blob = pcmBase64ToMp3Blob(res.audioBase64, 24000, 128);
         const binaryString = window.atob(res.audioBase64);
         const durationSeconds = getPcmDurationSeconds(binaryString.length, 24000, 1, 16);
@@ -1004,6 +1045,9 @@ async function retrieveBatch(jobId) {
         });
 
         savedCount++;
+        console.log(`[KidsPodcasts Batch] Episode "${ep.theme}" successfully saved in IndexedDB!`);
+      } else {
+        console.error(`[KidsPodcasts Batch] Missing audio for episode "${ep.theme}":`, res?.error);
       }
     }
 
@@ -1011,15 +1055,18 @@ async function retrieveBatch(jobId) {
     await refreshBatchJobsUI();
     await refreshEpisodesList();
 
-    const remainingActive = getAllBatchJobs().some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+    const remainingActive = getAllBatchJobs().some(j => {
+      const s = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+      return s !== "SUCCEEDED" && s !== "FAILED" && s !== "CANCELLED" && s !== "EXPIRED";
+    });
     if (!remainingActive) {
       stopBatchPolling();
     }
 
-    showToast(`✨ ${savedCount} épisode${savedCount > 1 ? 's ont' : ' a'} été converti${savedCount > 1 ? 's' : ''} en MP3 et ajouté${savedCount > 1 ? 's' : ''} à votre bibliothèque !`, "success", 4500);
+    showToast(`✨ ${savedCount} épisode${savedCount > 1 ? 's ont' : ' a'} été converti${savedCount > 1 ? 's' : ''} en MP3 et ajouté${savedCount > 1 ? 's' : ''} à votre bibliothèque !`, "success", 5000);
 
   } catch (e) {
-    console.error("Erreur récupération batch:", e);
+    console.error("[KidsPodcasts Batch] Erreur lors de la récupération:", e);
     showToast(`Erreur lors de la récupération : ${e.message}`, "error");
   }
 }

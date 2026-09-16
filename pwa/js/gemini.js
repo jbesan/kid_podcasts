@@ -332,12 +332,22 @@ export async function checkBatchJobStatus({ apiKey, jobName }) {
   }
 
   const data = await response.json();
-  const state = data.state || data.metadata?.state || (data.done ? "JOB_STATE_SUCCEEDED" : "JOB_STATE_RUNNING");
+  const rawState = data.state || data.metadata?.state || (data.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
+  const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+  const isDone = data.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
+
+  console.log(`[KidsPodcasts Batch] checkBatchJobStatus(${cleanName}):`, {
+    rawState,
+    normalizedState: cleanState,
+    done: isDone,
+    stats: data.metadata?.batchStats
+  });
 
   return {
     jobName,
-    state,
-    done: data.done || state === "JOB_STATE_SUCCEEDED" || state === "JOB_STATE_FAILED" || state === "JOB_STATE_CANCELLED",
+    state: cleanState,
+    rawState,
+    done: isDone,
     raw: data
   };
 }
@@ -347,11 +357,18 @@ export async function checkBatchJobStatus({ apiKey, jobName }) {
  */
 export async function fetchBatchJobResults({ apiKey, batchData }) {
   const raw = batchData.raw || batchData;
-  const inlined = raw.response?.inlinedResponses || raw.dest?.inlinedResponses;
+  console.log("[KidsPodcasts Batch] fetchBatchJobResults parsing raw payload:", raw);
+
+  // Google API can return inlinedResponses directly or nested as { inlinedResponses: [...] }
+  let inlined = raw.response?.inlinedResponses || raw.dest?.inlinedResponses || raw.metadata?.output?.inlinedResponses;
+  if (inlined && !Array.isArray(inlined) && Array.isArray(inlined.inlinedResponses)) {
+    inlined = inlined.inlinedResponses;
+  }
 
   // Case 1: Inlined responses
   if (inlined && Array.isArray(inlined)) {
-    return inlined.map(item => {
+    console.log(`[KidsPodcasts Batch] Found ${inlined.length} inlined responses in batch.`);
+    return inlined.map((item, index) => {
       const resp = item.response || {};
       const candidate = resp.candidates?.[0];
       let audioBase64 = null;
@@ -365,9 +382,12 @@ export async function fetchBatchJobResults({ apiKey, batchData }) {
       }
 
       const usage = resp.usageMetadata || {};
+      const episodeId = item.metadata?.episodeId;
+      console.log(`[KidsPodcasts Batch] Item #${index} [${item.metadata?.theme || 'sans titre'}]: episodeId=${episodeId}, hasAudio=${Boolean(audioBase64)}, audioBase64Length=${audioBase64 ? audioBase64.length : 0}`);
+
       return {
         metadata: item.metadata || {},
-        episodeId: item.metadata?.episodeId,
+        episodeId,
         audioBase64,
         usage: {
           promptTokens: usage.promptTokenCount || 0,
