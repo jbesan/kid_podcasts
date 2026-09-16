@@ -146,6 +146,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.checkSingleBatch = checkSingleBatch;
   window.retrieveBatch = retrieveBatch;
   window.deleteBatch = deleteBatch;
+  window.copyBatchId = copyBatchId;
+
+  // Setup batch polling & visibility listener
+  setupVisibilityListener();
+  startBatchPolling();
+  updateLastPollIndicator();
 });
 
 // --- Generation Mode Toggle ---
@@ -646,14 +652,20 @@ async function startBatchPipeline() {
     state.batchGroups = [{ id: 'bg_' + Date.now(), categoryId: CATEGORIES[0].id, topics: [] }];
     renderBatchGroups();
 
-    await refreshBatchJobsUI();
+    // Batch successfully created
+    elements.batchProgressBar.style.width = '100%';
+    elements.batchProgressSub.innerText = "Batch soumis avec succès !";
 
-    alert(`✅ Batch de ${allTasks.length} épisodes envoyé avec succès à Google !\n\nVous pouvez fermer votre ordinateur ou éteindre votre téléphone.\nLe traitement s'effectue en arrière-plan chez Google à tarif réduit (-50%).\n\nConsultez l'avancement dans la section « Batches en cours ».`);
+    await refreshBatchJobsUI();
+    updateLastPollIndicator();
+    startBatchPolling();
+
+    showToast(`✅ Batch de ${allTasks.length} épisodes soumis avec succès (-50%) ! Vous pouvez mettre en veille votre appareil.`, 'success', 6000);
 
   } catch (error) {
     clearInterval(timerInterval);
     console.error("Erreur Batch Pipeline:", error);
-    alert(`Erreur lors du lancement du batch : ${error.message}`);
+    showToast(`Erreur lors du lancement du batch : ${error.message}`, 'error', 5000);
     updateGenerationUI(false);
   } finally {
     clearInterval(timerInterval);
@@ -661,7 +673,132 @@ async function startBatchPipeline() {
   }
 }
 
+// --- Toast Notifications ---
+function showToast(message, type = 'info', duration = 3500) {
+  const container = document.getElementById('toast-container');
+  if (!container) {
+    console.log(`[Toast ${type}]: ${message}`);
+    return;
+  }
+
+  const toast = document.createElement('div');
+  const bgStyles = {
+    info: 'bg-slate-900/95 border-slate-700/80 text-slate-200 shadow-slate-950/50',
+    success: 'bg-emerald-950/95 border-emerald-600/80 text-emerald-200 shadow-emerald-950/50',
+    warning: 'bg-amber-950/95 border-amber-600/80 text-amber-200 shadow-amber-950/50',
+    error: 'bg-rose-950/95 border-rose-600/80 text-rose-200 shadow-rose-950/50'
+  };
+  const icons = {
+    info: 'fa-circle-info text-indigo-400',
+    success: 'fa-circle-check text-emerald-400',
+    warning: 'fa-triangle-exclamation text-amber-400',
+    error: 'fa-circle-xmark text-rose-400'
+  };
+
+  const styleClass = bgStyles[type] || bgStyles.info;
+  const iconClass = icons[type] || icons.info;
+
+  toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-2xl border text-xs shadow-2xl backdrop-blur-md transition-all duration-300 transform translate-y-4 opacity-0 ${styleClass}`;
+  toast.innerHTML = `
+    <i class="fa-solid ${iconClass} text-sm shrink-0"></i>
+    <span class="flex-1 font-medium leading-snug">${escapeHtml(message)}</span>
+  `;
+
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.remove('translate-y-4', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+  });
+
+  setTimeout(() => {
+    toast.classList.remove('translate-y-0', 'opacity-100');
+    toast.classList.add('translate-y-4', 'opacity-0');
+    setTimeout(() => {
+      if (toast.parentNode) toast.remove();
+    }, 300);
+  }, duration);
+}
+
+// --- Copy Batch ID to Clipboard ---
+async function copyBatchId(id, btnElement) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(id);
+    } else {
+      throw new Error('Fallback clipboard');
+    }
+  } catch {
+    const input = document.createElement('input');
+    input.value = id;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+
+  if (btnElement) {
+    const icon = btnElement.querySelector('i') || btnElement;
+    const origClass = icon.className;
+    icon.className = 'fa-solid fa-check text-emerald-400 text-[10px]';
+    setTimeout(() => { icon.className = origClass; }, 2000);
+  }
+  showToast(`Identifiant copié : ${id}`, 'info', 2000);
+}
+
 // --- Batches Feed & Polling ---
+let batchPollInterval = null;
+
+function updateLastPollIndicator() {
+  const el = document.getElementById('batch-last-poll-text');
+  if (!el) return;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  el.innerText = `Dernier check : ${timeStr}`;
+  el.classList.remove('hidden');
+}
+
+function startBatchPolling() {
+  const jobs = getAllBatchJobs();
+  const hasActive = jobs.some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+  if (!hasActive) {
+    stopBatchPolling();
+    return;
+  }
+
+  if (batchPollInterval) return; // already active
+
+  batchPollInterval = setInterval(async () => {
+    const currentJobs = getAllBatchJobs();
+    const stillActive = currentJobs.some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+    if (!stillActive) {
+      stopBatchPolling();
+      return;
+    }
+    await checkAllBatchesStatus(false);
+  }, 30000); // 30s auto-poll
+}
+
+function stopBatchPolling() {
+  if (batchPollInterval) {
+    clearInterval(batchPollInterval);
+    batchPollInterval = null;
+  }
+}
+
+function setupVisibilityListener() {
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+      const jobs = getAllBatchJobs();
+      const hasActive = jobs.some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+      if (hasActive) {
+        await checkAllBatchesStatus(false);
+        startBatchPolling();
+      }
+    }
+  });
+}
+
 async function refreshBatchJobsUI() {
   const jobs = getAllBatchJobs();
 
@@ -680,49 +817,58 @@ async function refreshBatchJobsUI() {
     const card = document.createElement('div');
     card.className = "bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-md";
 
+    const cleanId = job.id.replace('batches/', '');
     const isDone = job.state === "JOB_STATE_SUCCEEDED";
     const isFailed = job.state === "JOB_STATE_FAILED" || job.state === "JOB_STATE_CANCELLED";
+    const isRunning = job.state === "JOB_STATE_RUNNING" || job.state === "BATCH_STATE_RUNNING";
 
     const topicsSummary = job.episodes.map(e => e.theme).join(', ');
 
     let badgeHtml = '';
     if (isDone) {
-      badgeHtml = `<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">Prêt</span>`;
+      badgeHtml = `<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-[9px]"></i> Prêt</span>`;
     } else if (isFailed) {
-      badgeHtml = `<span class="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full text-[10px] font-bold">Échec</span>`;
+      badgeHtml = `<span class="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full text-[10px] font-bold flex items-center gap-1.5"><i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Échec</span>`;
+    } else if (isRunning) {
+      badgeHtml = `<span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-bold flex items-center gap-1.5 animate-pulse"><i class="fa-solid fa-spinner fa-spin text-[9px]"></i> En cours chez Google</span>`;
     } else {
-      badgeHtml = `<span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold animate-pulse">En cours chez Google...</span>`;
+      badgeHtml = `<span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold flex items-center gap-1.5"><i class="fa-regular fa-clock text-[9px]"></i> En attente</span>`;
     }
 
     card.innerHTML = `
       <div class="flex items-start justify-between gap-2">
-        <div>
-          <div class="flex items-center gap-2">
-            <h4 class="text-sm font-bold text-white">${job.displayName}</h4>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="text-sm font-bold text-white truncate max-w-[200px]">${escapeHtml(job.displayName)}</h4>
             ${badgeHtml}
           </div>
           <p class="text-[11px] text-slate-400 truncate max-w-[260px] mt-0.5" title="${escapeHtml(topicsSummary)}">
             ${escapeHtml(topicsSummary)}
           </p>
         </div>
-        <button onclick="window.deleteBatch('${job.id}')" title="Supprimer ce batch" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors">
+        <button onclick="window.deleteBatch('${job.id}')" title="Supprimer ce batch" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors shrink-0">
           <i class="fa-solid fa-trash-can"></i>
         </button>
       </div>
 
-      <div class="bg-slate-950 rounded-2xl p-2.5 flex items-center justify-between gap-3 border border-slate-800">
+      <div class="bg-slate-950 rounded-2xl p-2.5 flex items-center justify-between gap-2 border border-slate-800">
         ${isDone ? `
           <button onclick="window.retrieveBatch('${job.id}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-1.5 text-xs font-bold shadow-md transition-all">
             <i class="fa-solid fa-cloud-arrow-down"></i>
             <span>Récupérer & Sauvegarder (${job.episodes.length} MP3)</span>
           </button>
         ` : `
-          <button onclick="window.checkSingleBatch('${job.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all">
+          <button onclick="window.checkSingleBatch('${job.id}', this)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all">
             <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
-            <span>Vérifier le statut</span>
+            <span>Vérifier</span>
           </button>
         `}
-        <span class="text-[10px] font-mono text-slate-500">${job.id.replace('batches/', '')}</span>
+        <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 max-w-[170px]" title="Identifiant du batch">
+          <span class="select-all font-mono text-[10px] text-slate-300 truncate cursor-text select-text">${cleanId}</span>
+          <button onclick="window.copyBatchId('${cleanId}', this)" title="Copier l'identifiant" class="text-slate-400 hover:text-indigo-400 p-0.5 text-xs transition-colors shrink-0">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
       </div>
     `;
 
@@ -735,14 +881,20 @@ async function checkAllBatchesStatus(manual = false) {
   const settings = getSettings();
   if (!settings.apiKey || jobs.length === 0) return;
 
+  const refreshIcon = document.getElementById('batch-refresh-icon');
+  if (manual && refreshIcon) refreshIcon.classList.add('fa-spin');
+
   let updatedCount = 0;
+  let newlySucceededCount = 0;
+
   for (const job of jobs) {
-    if (job.state !== "JOB_STATE_SUCCEEDED") {
+    if (job.state !== "JOB_STATE_SUCCEEDED" && job.state !== "JOB_STATE_FAILED" && job.state !== "JOB_STATE_CANCELLED") {
       try {
         const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id });
         if (res.state !== job.state) {
           updateBatchJob(job.id, { state: res.state, raw: res.raw });
           updatedCount++;
+          if (res.state === "JOB_STATE_SUCCEEDED") newlySucceededCount++;
         }
       } catch (e) {
         console.warn(`Erreur lors de la vérification du batch ${job.id}:`, e);
@@ -751,29 +903,52 @@ async function checkAllBatchesStatus(manual = false) {
   }
 
   await refreshBatchJobsUI();
-  if (manual) {
-    alert(updatedCount > 0 ? "Statuts des batches mis à jour !" : "Tous les statuts sont à jour.");
+  updateLastPollIndicator();
+
+  if (manual && refreshIcon) {
+    setTimeout(() => refreshIcon.classList.remove('fa-spin'), 600);
+  }
+
+  const remainingActive = getAllBatchJobs().some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+  if (!remainingActive) {
+    stopBatchPolling();
+  }
+
+  if (newlySucceededCount > 0) {
+    showToast(`🎉 ${newlySucceededCount} batch est prêt à être récupéré !`, 'success');
+  } else if (manual) {
+    showToast(updatedCount > 0 ? "Statuts des batches mis à jour !" : "Tous les statuts sont à jour.", 'info', 2000);
   }
 }
 
-async function checkSingleBatch(jobId) {
+async function checkSingleBatch(jobId, btnElement) {
   const settings = getSettings();
   if (!settings.apiKey) {
-    alert("Clé API manquante dans les Réglages.");
+    showToast("Clé API manquante dans les Réglages.", "warning");
     return;
   }
+
+  const icon = btnElement?.querySelector('i');
+  if (icon) icon.classList.add('fa-spin');
+
   try {
     const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
     updateBatchJob(jobId, { state: res.state, raw: res.raw });
     await refreshBatchJobsUI();
+    updateLastPollIndicator();
 
     if (res.state === "JOB_STATE_SUCCEEDED") {
-      alert("🎉 Le batch est terminé et prêt à être récupéré !");
+      showToast("🎉 Le batch est terminé et prêt à être récupéré !", "success");
     } else {
-      alert(`Statut actuel du batch : ${res.state.replace('JOB_STATE_', '')}`);
+      const displayState = res.state.replace('JOB_STATE_', '').replace('BATCH_STATE_', '');
+      showToast(`Statut actuel du batch : ${displayState}`, "info", 2500);
     }
   } catch (e) {
-    alert(`Erreur de vérification : ${e.message}`);
+    showToast(`Erreur de vérification : ${e.message}`, "error");
+  } finally {
+    if (icon) {
+      setTimeout(() => icon.classList.remove('fa-spin'), 500);
+    }
   }
 }
 
@@ -784,9 +959,10 @@ async function retrieveBatch(jobId) {
   if (!job) return;
 
   try {
+    showToast("Récupération et conversion des MP3...", "info", 3000);
     const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
     if (checkRes.state !== "JOB_STATE_SUCCEEDED") {
-      alert(`Ce batch n'est pas encore terminé (${checkRes.state}).`);
+      showToast(`Ce batch n'est pas encore terminé (${checkRes.state.replace('JOB_STATE_', '')}).`, "warning");
       return;
     }
 
@@ -835,11 +1011,16 @@ async function retrieveBatch(jobId) {
     await refreshBatchJobsUI();
     await refreshEpisodesList();
 
-    alert(`✨ ${savedCount} épisode${savedCount > 1 ? 's ont' : ' a'} été récupéré${savedCount > 1 ? 's' : ''}, converti${savedCount > 1 ? 's' : ''} en MP3 et ajouté${savedCount > 1 ? 's' : ''} à votre bibliothèque !`);
+    const remainingActive = getAllBatchJobs().some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+    if (!remainingActive) {
+      stopBatchPolling();
+    }
+
+    showToast(`✨ ${savedCount} épisode${savedCount > 1 ? 's ont' : ' a'} été converti${savedCount > 1 ? 's' : ''} en MP3 et ajouté${savedCount > 1 ? 's' : ''} à votre bibliothèque !`, "success", 4500);
 
   } catch (e) {
     console.error("Erreur récupération batch:", e);
-    alert(`Erreur lors de la récupération du batch : ${e.message}`);
+    showToast(`Erreur lors de la récupération : ${e.message}`, "error");
   }
 }
 
@@ -847,6 +1028,11 @@ function deleteBatch(jobId) {
   if (confirm("Supprimer ce batch de la liste ?")) {
     deleteBatchJob(jobId);
     refreshBatchJobsUI();
+    const remainingActive = getAllBatchJobs().some(j => j.state !== "JOB_STATE_SUCCEEDED" && j.state !== "JOB_STATE_FAILED" && j.state !== "JOB_STATE_CANCELLED");
+    if (!remainingActive) {
+      stopBatchPolling();
+    }
+    showToast("Batch supprimé de la liste", "info", 2000);
   }
 }
 

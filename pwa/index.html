@@ -221,10 +221,13 @@
             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Batches en cours</h3>
             <span id="batch-badge-count" class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold font-mono">0</span>
           </div>
-          <button onclick="checkAllBatchesStatus(true)" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 transition-colors">
-            <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
-            <span>Actualiser</span>
-          </button>
+          <div class="flex items-center gap-2.5">
+            <span id="batch-last-poll-text" class="text-[10px] text-slate-500 hidden font-mono">Dernier check : --:--</span>
+            <button onclick="checkAllBatchesStatus(true)" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 transition-colors">
+              <i id="batch-refresh-icon" class="fa-solid fa-arrows-rotate text-[10px]"></i>
+              <span>Actualiser</span>
+            </button>
+          </div>
         </div>
 
         <div id="batch-jobs-feed" class="space-y-3">
@@ -422,6 +425,9 @@
 
     </div>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-full max-w-sm px-4"></div>
 
   <!-- App Main JavaScript Module -->
   <script type="module" src="js/app.js?v=2.3"></script>
