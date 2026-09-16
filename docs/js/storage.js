@@ -116,10 +116,41 @@ export async function deleteEpisode(id) {
 // --- Batch Jobs Storage (LocalStorage) ---
 const BATCH_JOBS_KEY = 'kids_podcast_batch_jobs';
 
+function sanitizeBatchJob(job) {
+  if (!job) return job;
+  const clean = { ...job };
+  // Never persist heavy payloads, responses or base64 audio into localStorage (5MB limit)
+  delete clean.raw;
+  delete clean.audioBase64;
+  delete clean.response;
+  return clean;
+}
+
 export function getAllBatchJobs() {
   try {
     const raw = localStorage.getItem(BATCH_JOBS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const jobs = JSON.parse(raw);
+    if (!Array.isArray(jobs)) return [];
+
+    let neededCleaning = false;
+    const sanitizedJobs = jobs.map(j => {
+      if (j && (j.raw || j.audioBase64 || j.response)) {
+        neededCleaning = true;
+        return sanitizeBatchJob(j);
+      }
+      return j;
+    });
+
+    if (neededCleaning) {
+      try {
+        localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(sanitizedJobs));
+        console.log("Auto-cleaned heavy raw batch data from localStorage.");
+      } catch (err) {
+        console.warn("Could not write sanitized jobs:", err);
+      }
+    }
+    return sanitizedJobs;
   } catch (e) {
     console.warn("Could not read batch jobs from localStorage:", e);
     return [];
@@ -128,15 +159,16 @@ export function getAllBatchJobs() {
 
 export function saveBatchJob(job) {
   try {
+    const cleanJob = sanitizeBatchJob(job);
     const jobs = getAllBatchJobs();
-    const existingIdx = jobs.findIndex(j => j.id === job.id);
+    const existingIdx = jobs.findIndex(j => j.id === cleanJob.id);
     if (existingIdx >= 0) {
-      jobs[existingIdx] = { ...jobs[existingIdx], ...job };
+      jobs[existingIdx] = { ...jobs[existingIdx], ...cleanJob };
     } else {
-      jobs.unshift(job);
+      jobs.unshift(cleanJob);
     }
     localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(jobs));
-    return job;
+    return cleanJob;
   } catch (e) {
     console.error("Could not save batch job:", e);
     return job;
@@ -145,15 +177,32 @@ export function saveBatchJob(job) {
 
 export function updateBatchJob(jobId, updates) {
   try {
+    const cleanUpdates = sanitizeBatchJob(updates);
     const jobs = getAllBatchJobs();
     const idx = jobs.findIndex(j => j.id === jobId);
     if (idx >= 0) {
-      jobs[idx] = { ...jobs[idx], ...updates };
+      jobs[idx] = { ...jobs[idx], ...cleanUpdates };
+      delete jobs[idx].raw;
+      delete jobs[idx].audioBase64;
+      delete jobs[idx].response;
       localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(jobs));
       return jobs[idx];
     }
   } catch (e) {
     console.error("Could not update batch job:", e);
+    // Emergency cleanup if quota is hit
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      try {
+        const raw = localStorage.getItem(BATCH_JOBS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const sanitized = parsed.map(sanitizeBatchJob);
+          localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(sanitized));
+        }
+      } catch (inner) {
+        console.error("Emergency storage cleanup failed:", inner);
+      }
+    }
   }
   return null;
 }

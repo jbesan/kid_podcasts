@@ -892,7 +892,7 @@ async function checkAllBatchesStatus(manual = false) {
       try {
         const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id });
         if (res.state !== job.state) {
-          updateBatchJob(job.id, { state: res.state, raw: res.raw });
+          updateBatchJob(job.id, { state: res.state, updatedAt: Date.now() });
           updatedCount++;
           if (res.state === "JOB_STATE_SUCCEEDED") newlySucceededCount++;
         }
@@ -933,7 +933,7 @@ async function checkSingleBatch(jobId, btnElement) {
 
   try {
     const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
-    updateBatchJob(jobId, { state: res.state, raw: res.raw });
+    updateBatchJob(jobId, { state: res.state, updatedAt: Date.now() });
     await refreshBatchJobsUI();
     updateLastPollIndicator();
 
