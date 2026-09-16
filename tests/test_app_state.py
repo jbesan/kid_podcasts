@@ -1,3 +1,4 @@
+from config import DEFAULT_TRANSCRIPT_MODEL
 from models.state import AppState
 
 
@@ -7,7 +8,7 @@ def test_app_state_initialization():
     assert state.scripts == []
     assert state.audio_ready == {}
     assert state.total_session_cost == 0.0
-    assert state.transcript_model == "gemini-2.5-pro"
+    assert state.transcript_model == DEFAULT_TRANSCRIPT_MODEL
 
 
 def test_app_state_add_script():
@@ -56,7 +57,7 @@ def test_app_state_legacy_settings_reset():
             "tts_model": "gemini-2.5-flash-preview-tts",
         }
     )
-    assert state.transcript_model == "gemini-2.5-pro"
+    assert state.transcript_model == DEFAULT_TRANSCRIPT_MODEL
     assert state.tts_model == "gemini-2.5-pro-preview-tts"
 
 

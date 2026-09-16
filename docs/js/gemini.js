@@ -204,3 +204,223 @@ export async function synthesizePodcastAudio({
     }
   };
 }
+
+/**
+ * Creates a Gemini Batch API job for multiple podcast audio syntheses.
+ * Uses 50% cheaper Batch pricing and executes fully asynchronously.
+ */
+export async function createTtsBatchJob({
+  apiKey,
+  episodes,
+  model = DEFAULT_TTS_MODEL
+}) {
+  if (!apiKey || apiKey.trim() === "") {
+    throw new Error("Clé API Google AI Studio manquante.");
+  }
+  if (!episodes || episodes.length === 0) {
+    throw new Error("Aucun épisode à inclure dans le batch.");
+  }
+
+  const url = `${BASE_API_URL}/${encodeURIComponent(model)}:batchGenerateContent?key=${encodeURIComponent(apiKey.trim())}`;
+
+  const inlinedRequests = episodes.map(ep => {
+    const ttsPrompt = buildTtsPrompt(ep.scriptItems);
+    return {
+      metadata: {
+        episodeId: ep.id,
+        theme: ep.theme,
+        category: ep.category,
+        age: String(ep.age),
+        duration: String(ep.duration)
+      },
+      request: {
+        contents: [
+          {
+            parts: [{ text: ttsPrompt }]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          temperature: 1.0,
+          speechConfig: {
+            multiSpeakerVoiceConfig: {
+              speakerVoiceConfigs: [
+                {
+                  speaker: "Sophie",
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: "Erinome"
+                    }
+                  }
+                },
+                {
+                  speaker: "Marc",
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: "Algieba"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    };
+  });
+
+  const payload = {
+    batch: {
+      displayName: `Kids-Podcasts-${Date.now()}`,
+      inputConfig: {
+        requests: {
+          requests: inlinedRequests
+        }
+      }
+    }
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    let errMsg = errText;
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson.error?.message || errText;
+    } catch (e) {}
+    throw new Error(`Échec de création du batch (${response.status}) : ${errMsg}`);
+  }
+
+  const data = await response.json();
+  // Name can be in data.name or data.metadata?.name (e.g. "batches/123456...")
+  const jobName = data.name || data.metadata?.name;
+  if (!jobName) {
+    throw new Error("Impossible de trouver l'identifiant du batch retourné par Google.");
+  }
+
+  return {
+    jobName,
+    data
+  };
+}
+
+/**
+ * Checks the status of a Gemini Batch job.
+ */
+export async function checkBatchJobStatus({ apiKey, jobName }) {
+  if (!apiKey || !jobName) {
+    throw new Error("Clé API ou identifiant de batch manquant.");
+  }
+
+  // Strip leading slash if any
+  const cleanName = jobName.startsWith('/') ? jobName.substring(1) : jobName;
+  const url = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?key=${encodeURIComponent(apiKey.trim())}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" }
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Erreur lors de la vérification du batch (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const state = data.state || data.metadata?.state || (data.done ? "JOB_STATE_SUCCEEDED" : "JOB_STATE_RUNNING");
+
+  return {
+    jobName,
+    state,
+    done: data.done || state === "JOB_STATE_SUCCEEDED" || state === "JOB_STATE_FAILED" || state === "JOB_STATE_CANCELLED",
+    raw: data
+  };
+}
+
+/**
+ * Fetches and parses batch job results, extracting raw audio base64 for each episode.
+ */
+export async function fetchBatchJobResults({ apiKey, batchData }) {
+  const raw = batchData.raw || batchData;
+  const inlined = raw.response?.inlinedResponses || raw.dest?.inlinedResponses;
+
+  // Case 1: Inlined responses
+  if (inlined && Array.isArray(inlined)) {
+    return inlined.map(item => {
+      const resp = item.response || {};
+      const candidate = resp.candidates?.[0];
+      let audioBase64 = null;
+      if (candidate?.content?.parts) {
+        for (const part of candidate.content.parts) {
+          if (part.inlineData?.data) {
+            audioBase64 = part.inlineData.data;
+            break;
+          }
+        }
+      }
+
+      const usage = resp.usageMetadata || {};
+      return {
+        metadata: item.metadata || {},
+        episodeId: item.metadata?.episodeId,
+        audioBase64,
+        usage: {
+          promptTokens: usage.promptTokenCount || 0,
+          candidatesTokens: usage.candidatesTokenCount || 0
+        },
+        error: item.error || (!audioBase64 ? "Aucune donnée audio reçue" : null)
+      };
+    });
+  }
+
+  // Case 2: Response file (JSONL)
+  const responsesFile = raw.response?.responsesFile || raw.dest?.fileName;
+  if (responsesFile) {
+    const fileUrl = `https://generativelanguage.googleapis.com/download/v1beta/${responsesFile}:download?alt=media&key=${encodeURIComponent(apiKey.trim())}`;
+    const fileResp = await fetch(fileUrl);
+    if (!fileResp.ok) {
+      throw new Error(`Impossible de télécharger le fichier résultat du batch (${fileResp.status})`);
+    }
+
+    const jsonlText = await fileResp.text();
+    const lines = jsonlText.split('\n').filter(line => line.trim().length > 0);
+    
+    return lines.map(line => {
+      try {
+        const item = JSON.parse(line);
+        const resp = item.response || {};
+        const candidate = resp.candidates?.[0];
+        let audioBase64 = null;
+        if (candidate?.content?.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.inlineData?.data) {
+              audioBase64 = part.inlineData.data;
+              break;
+            }
+          }
+        }
+        const usage = resp.usageMetadata || {};
+        return {
+          metadata: item.metadata || {},
+          episodeId: item.metadata?.episodeId || item.key,
+          audioBase64,
+          usage: {
+            promptTokens: usage.promptTokenCount || 0,
+            candidatesTokens: usage.candidatesTokenCount || 0
+          },
+          error: item.error || (!audioBase64 ? "Aucune donnée audio reçue" : null)
+        };
+      } catch (e) {
+        return { error: `Erreur de décodage JSONL: ${e.message}` };
+      }
+    });
+  }
+
+  throw new Error("Aucun résultat audio trouvé dans la réponse du batch.");
+}
+

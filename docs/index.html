@@ -78,32 +78,79 @@
     <!-- ================= SCREEN 1: CREATE ================= -->
     <section id="screen-create" class="space-y-4">
 
-      <!-- 1. Catégories / Univers (10 Univers) -->
-      <div class="space-y-2">
-        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-          1. Univers
-        </label>
-        <div id="categories-container" class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          <!-- Dynamic categories injected by JS -->
+      <!-- Generation Mode Toggle -->
+      <div class="flex bg-slate-950 p-1 rounded-2xl border border-slate-800">
+        <button 
+          id="mode-btn-direct" 
+          onclick="switchGenerationMode('direct')" 
+          class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-bolt text-[11px]"></i>
+          <span>Direct (1 podcast)</span>
+        </button>
+        <button 
+          id="mode-btn-batch" 
+          onclick="switchGenerationMode('batch')" 
+          class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-layer-group text-[11px]"></i>
+          <span>Différé Batch (-50%)</span>
+        </button>
+      </div>
+
+      <!-- ================= MODE 1: DIRECT ================= -->
+      <div id="container-mode-direct" class="space-y-4">
+        <!-- 1. Catégories / Univers (10 Univers) -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+            1. Univers
+          </label>
+          <div id="categories-container" class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <!-- Dynamic categories injected by JS -->
+          </div>
+        </div>
+
+        <!-- 2. Sujet du Podcast -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+            2. Sujet
+          </label>
+          <div class="relative">
+            <input 
+              id="theme-input" 
+              type="text" 
+              placeholder="Ex: Les requins, Le Mont Saint-Michel, Le feu..." 
+              class="w-full bg-slate-900 border border-slate-800 rounded-2xl py-3.5 px-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors shadow-inner"
+            />
+          </div>
         </div>
       </div>
 
-      <!-- 2. Sujet du Podcast -->
-      <div class="space-y-1.5">
-        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-          2. Sujet
-        </label>
-        <div class="relative">
-          <input 
-            id="theme-input" 
-            type="text" 
-            placeholder="Ex: Les requins, Le Mont Saint-Michel, Le feu..." 
-            class="w-full bg-slate-900 border border-slate-800 rounded-2xl py-3.5 px-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors shadow-inner"
-          />
+      <!-- ================= MODE 2: BATCH PROGRESSIVE BUILDER ================= -->
+      <div id="container-mode-batch" class="hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+            Univers & Sujets par lot
+          </label>
+          <span id="batch-total-count" class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold font-mono">
+            0 épisode
+          </span>
         </div>
+
+        <!-- Dynamic list of Univers groups -->
+        <div id="batch-groups-list" class="space-y-3">
+          <!-- Dynamically injected by JS -->
+        </div>
+
+        <!-- Add Univers Button -->
+        <button 
+          type="button" 
+          onclick="addBatchGroup()" 
+          class="w-full py-2.5 bg-slate-900 hover:bg-slate-850 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 border-dashed rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+          <i class="fa-solid fa-plus text-[11px]"></i>
+          <span>Ajouter un autre univers</span>
+        </button>
       </div>
 
-      <!-- 3. Âge Cible & Durée (2 colonnes) -->
+      <!-- 3. Âge Cible & Durée (2 colonnes) - Partagés -->
       <div class="grid grid-cols-2 gap-3">
         
         <!-- Âge Cible -->
@@ -141,10 +188,10 @@
       <!-- 4. Bouton Principal Générer -->
       <button 
         id="btn-generate" 
-        onclick="startGeneration()" 
+        onclick="handleGenerateClick()" 
         class="w-full py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2.5 transition-all transform active:scale-[0.98]">
         <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
-        <span>Générer le Podcast</span>
+        <span id="btn-generate-text">Générer le Podcast</span>
       </button>
 
       <!-- Animation de Génération (Live Progress) -->
@@ -165,6 +212,24 @@
         </div>
         
         <p id="progress-sub" class="text-[11px] text-slate-400 italic">5 mots d'anglais & structure radio adaptées...</p>
+      </div>
+
+      <!-- Feed des Batches en cours (Gemini Batch API) -->
+      <div id="batch-jobs-section" class="hidden pt-2 space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <div class="flex items-center gap-2">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Batches en cours</h3>
+            <span id="batch-badge-count" class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold font-mono">0</span>
+          </div>
+          <button onclick="checkAllBatchesStatus(true)" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 transition-colors">
+            <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
+            <span>Actualiser</span>
+          </button>
+        </div>
+
+        <div id="batch-jobs-feed" class="space-y-3">
+          <!-- Dynamically populated batch jobs -->
+        </div>
       </div>
 
       <!-- Feed des Podcasts Enregistrés -->
@@ -328,8 +393,9 @@
         <div class="space-y-1">
           <label class="text-[10px] font-bold text-slate-400 uppercase">Script Model</label>
           <select id="script-model-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-1.5 px-2 text-xs text-white focus:outline-none">
-            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Qualité max)</option>
+            <option value="gemini-3.8-flash" selected>gemini-3.8-flash (Recommandé - Ultra rapide)</option>
             <option value="gemini-3.7-flash">gemini-3.7-flash (Rapide & Éco)</option>
+            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Qualité max)</option>
             <option value="gemini-2.5-pro">gemini-2.5-pro</option>
             <option value="gemini-2.5-flash">gemini-2.5-flash</option>
           </select>

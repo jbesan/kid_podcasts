@@ -147,3 +147,22 @@ export async function shareOrDownloadAudio(blob, filename = "podcast.mp3") {
   }, 2000);
   return true;
 }
+
+/**
+ * Direct file download without mobile share dialog (ideal for Mac/Desktop -> Deezer & Yoto).
+ */
+export function downloadAudioFileDirect(blob, filename = "podcast.mp3") {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 2000);
+  return true;
+}
+

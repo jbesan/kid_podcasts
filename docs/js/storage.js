@@ -11,7 +11,7 @@ const SETTINGS_KEY = 'kids_podcast_pwa_settings';
 export function getSettings() {
   const defaults = {
     apiKey: '',
-    scriptModel: 'gemini-3.1-pro-preview',
+    scriptModel: 'gemini-3.8-flash',
     ttsModel: 'gemini-2.5-pro-preview-tts',
     kidsContext: 'Deux enfants curieux et dynamiques. Aiment les découvertes, la nature et les aventures.',
     targetAge: 6,
@@ -112,3 +112,61 @@ export async function deleteEpisode(id) {
     request.onerror = () => reject(request.error);
   });
 }
+
+// --- Batch Jobs Storage (LocalStorage) ---
+const BATCH_JOBS_KEY = 'kids_podcast_batch_jobs';
+
+export function getAllBatchJobs() {
+  try {
+    const raw = localStorage.getItem(BATCH_JOBS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.warn("Could not read batch jobs from localStorage:", e);
+    return [];
+  }
+}
+
+export function saveBatchJob(job) {
+  try {
+    const jobs = getAllBatchJobs();
+    const existingIdx = jobs.findIndex(j => j.id === job.id);
+    if (existingIdx >= 0) {
+      jobs[existingIdx] = { ...jobs[existingIdx], ...job };
+    } else {
+      jobs.unshift(job);
+    }
+    localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(jobs));
+    return job;
+  } catch (e) {
+    console.error("Could not save batch job:", e);
+    return job;
+  }
+}
+
+export function updateBatchJob(jobId, updates) {
+  try {
+    const jobs = getAllBatchJobs();
+    const idx = jobs.findIndex(j => j.id === jobId);
+    if (idx >= 0) {
+      jobs[idx] = { ...jobs[idx], ...updates };
+      localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(jobs));
+      return jobs[idx];
+    }
+  } catch (e) {
+    console.error("Could not update batch job:", e);
+  }
+  return null;
+}
+
+export function deleteBatchJob(jobId) {
+  try {
+    let jobs = getAllBatchJobs();
+    jobs = jobs.filter(j => j.id !== jobId);
+    localStorage.setItem(BATCH_JOBS_KEY, JSON.stringify(jobs));
+    return true;
+  } catch (e) {
+    console.error("Could not delete batch job:", e);
+    return false;
+  }
+}
+
