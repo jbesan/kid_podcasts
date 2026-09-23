@@ -160,7 +160,8 @@ class PodcastGenerator:
     ) -> tuple[list[dict], dict]:
         """Generates a podcast script using the specified model."""
         if word_count is None:
-            word_count = duration * 130
+            # TTS speaking pace is ~170-175 words per minute in spoken dialogue
+            word_count = duration * 175
 
         logger.info(
             "Generating script for theme '%s' (category: %s, duration: %d min, age: %d, model: %s, word_count: %d)...",

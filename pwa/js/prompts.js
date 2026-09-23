@@ -18,7 +18,8 @@ export const CATEGORIES = [
 ];
 
 export function buildScriptPrompt({ category, theme, duration, age, context }) {
-  const wordCount = duration * 130;
+  // TTS audio pacing is ~170-175 words per minute in spoken French dialogue
+  const wordCount = Math.round(duration * 175);
   
   return `# Goal
 Generate an educational and engaging audio podcast script tailored to kids based on their context (age: ${age} years old) to help them learn and remember new things.
@@ -27,7 +28,8 @@ The tone must be premium, similar to a high-quality radio production.
 # Inputs
 - Category: ${category}
 - Topic: ${theme}
-- Duration Goal: ${duration} minutes = ${wordCount} words
+- Target Duration: ${duration} minutes
+- Required Word Count: approximately ${wordCount} words (calibrated for ${duration} minutes at ~175 words/minute)
 - Target Age: ${age} years old
 - Kids life context:
   ${context || "Deux enfants curieux et dynamiques."}
@@ -48,9 +50,9 @@ The tone must be premium, similar to a high-quality radio production.
    4. "Le saviez-vous": 3 fun facts about the topic.
    5. Key Takeaways: Wrap-up what they have learned + all 5 English words one more time.
    6. Outro: A recap and a simple home observation/experiment. End with "À très bientôt les petits curieux !"
-5. Length & Content Depth:
-   - You MUST produce an output of roughly ${wordCount} words.
-   - DO NOT summarize prematurely. Elaborate on descriptions, scenery, character feelings, and detailed explanations.
+5. Length & Content Depth (CRITICAL):
+   - You MUST produce an extensive script of approximately ${wordCount} words to guarantee a full ${duration}-minute audio episode.
+   - DO NOT summarize prematurely or rush to conclusion. Elaborate on descriptions, scenery, character feelings, curiosity, and detailed explanations.
 6. Steering & Pacing:
    - Use ONLY these functional steering tags in brackets: [whispering], [shouting], [laughing], [sighing], [short pause], [American accent].
    - ONOMATOPOEIA: Max 3 in the whole script.

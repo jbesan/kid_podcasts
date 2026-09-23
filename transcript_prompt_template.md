@@ -7,7 +7,8 @@ The tone must be premium, similar to a high-quality radio production. This scrip
 
 - Category: {category}
 - Topic: {theme}
-- Duration Goal: {duration} minutes = {word_count} words
+- Target Duration: {duration} minutes
+- Required Word Count: approximately {word_count} words (calibrated for {duration} minutes at ~175 words/minute)
 - Target Age: {age} years old
 - Kids life context:
   {context}
@@ -30,8 +31,8 @@ The tone must be premium, similar to a high-quality radio production. This scrip
    5. Key Takeaways: Wrap-up what they have learned + all 5 english words one more time.
    6. Outro: A recap and a simple home experiment. End with "À très bientôt les petits curieux !"
 5. Length & Content Depth (CRITICAL):
-   - You MUST produce an output of roughly {word_count} words
-   - DO NOT summarize. Elaborate on descriptions, scenery, character feelings, and detailed scientific/natural/cultural explanations.
+   - You MUST produce an extensive script of approximately {word_count} words to guarantee a full {duration}-minute audio episode.
+   - DO NOT summarize prematurely or rush to conclusion. Elaborate on descriptions, scenery, character feelings, curiosity, and detailed explanations.
 6. Steering & Pacing:
    - Use ONLY these functional steering tags in brackets: [whispering], [shouting], [laughing], [sighing], [short pause], [American accent].
    - Do NOT use emotional tags like [curious] or [pedagogical]; these are handled by the character's default profile.
