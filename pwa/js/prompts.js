@@ -11,7 +11,8 @@ export const CATEGORIES = [
   { id: "sciences", name: "Sciences", icon: "🔬", desc: "Inventions, robots, électricité, gravité..." },
   { id: "corps", name: "Corps Humain", icon: "🫀", desc: "Le cerveau, le cœur, les 5 sens, sommeil..." },
   { id: "geographie", name: "Géographie", icon: "🌍", desc: "Volcans, terres lointaines, voyages..." },
-  { id: "culture", name: "Culture", icon: "🏛️", desc: "Légendes, monuments, contes, musique..." },
+  { id: "culture", name: "Culture", icon: "🏛️", desc: "Légendes, monuments, contes, traditions..." },
+  { id: "musique", name: "Musique", icon: "🎵", desc: "Instruments, rythmes, styles musicaux, compositeurs..." },
   { id: "cuisine", name: "Cuisine", icon: "🍳", desc: "Fromage, chocolat, comment poussent les fruits..." },
   { id: "personnages", name: "Personnages", icon: "👑", desc: "Grands inventeurs, explorateurs, héros..." }
 ];

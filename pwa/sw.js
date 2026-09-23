@@ -1,5 +1,5 @@
 // Service Worker for Kids Podcast PWA - Network First Strategy
-const CACHE_NAME = 'kid-podcasts-v6';
+const CACHE_NAME = 'kid-podcasts-v7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

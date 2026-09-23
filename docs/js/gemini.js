@@ -127,6 +127,30 @@ export async function generateScript({
 }
 
 /**
+ * Helper to construct contents parts for TTS.
+ * Gemini 3.8+ requires structured parts with speechMetadata for each turn in multi-speaker mode.
+ * Legacy models (2.5 and 3.1) expect a single formatted transcript text block.
+ */
+function buildTtsParts(scriptItems, model) {
+  const isNewTtsFormat = model.includes("3.8") || model.startsWith("gemini-3.8");
+  if (isNewTtsFormat) {
+    return (scriptItems || []).map(item => {
+      const rawSpeaker = item.speaker || "Sophie";
+      const speaker = rawSpeaker.toLowerCase().includes("marc") ? "Marc" : "Sophie";
+      let text = item.text || "";
+      text = text.replace(/\[(Sophie|Marc)\s*-\s*([^\]]+)\]/gi, "[$2]");
+      return {
+        text,
+        speechMetadata: {
+          speaker
+        }
+      };
+    });
+  }
+  return [{ text: buildTtsPrompt(scriptItems) }];
+}
+
+/**
  * Synthesizes the podcast dialogue into audio using Gemini Multi-Speaker TTS.
  */
 export async function synthesizePodcastAudio({
@@ -134,12 +158,12 @@ export async function synthesizePodcastAudio({
   scriptItems,
   model = DEFAULT_TTS_MODEL
 }) {
-  const ttsPrompt = buildTtsPrompt(scriptItems);
+  const parts = buildTtsParts(scriptItems, model);
 
   const payload = {
     contents: [
       {
-        parts: [{ text: ttsPrompt }]
+        parts
       }
     ],
     generationConfig: {
@@ -224,7 +248,7 @@ export async function createTtsBatchJob({
   const url = `${BASE_API_URL}/${encodeURIComponent(model)}:batchGenerateContent?key=${encodeURIComponent(apiKey.trim())}`;
 
   const inlinedRequests = episodes.map(ep => {
-    const ttsPrompt = buildTtsPrompt(ep.scriptItems);
+    const parts = buildTtsParts(ep.scriptItems, model);
     return {
       metadata: {
         episodeId: ep.id,
@@ -236,7 +260,7 @@ export async function createTtsBatchJob({
       request: {
         contents: [
           {
-            parts: [{ text: ttsPrompt }]
+            parts
           }
         ],
         generationConfig: {
