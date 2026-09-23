@@ -95,7 +95,10 @@ export async function generateScript({
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: SCRIPT_JSON_SCHEMA,
-      temperature: 0.8
+      temperature: 0.8,
+      thinkingConfig: {
+        thinkingLevel: "high"
+      }
     }
   };
 
@@ -114,10 +117,12 @@ export async function generateScript({
   }
 
   const items = parsed.items || (Array.isArray(parsed) ? parsed : []);
+  const pedagogicalPlan = parsed.pedagogical_plan || null;
   const usageMetadata = data.usageMetadata || {};
 
   return {
     items,
+    pedagogicalPlan,
     usage: {
       promptTokens: usageMetadata.promptTokenCount || 0,
       candidatesTokens: usageMetadata.candidatesTokenCount || 0,

@@ -95,6 +95,10 @@ function initDomElements() {
   elements.btnPlayPause = document.getElementById('btn-play-pause');
   elements.btnSpeed = document.getElementById('btn-speed');
   elements.scriptDialogueContainer = document.getElementById('script-dialogue-container');
+  elements.playerPedagogyCard = document.getElementById('player-pedagogy-card');
+  elements.playerLearningGoal = document.getElementById('player-learning-goal');
+  elements.playerEnglishWords = document.getElementById('player-english-words');
+  elements.playerWordsBadge = document.getElementById('player-words-badge');
 }
 
 // --- Initialization ---
@@ -517,6 +521,7 @@ async function startDirectGeneration() {
       age: state.age,
       duration: state.duration,
       scriptItems: scriptResult.items,
+      pedagogicalPlan: scriptResult.pedagogicalPlan || null,
       audioBlob: audioResult.audioBlob,
       durationSeconds: audioResult.durationSeconds,
       cost: costData.totalCost,
@@ -613,6 +618,7 @@ async function startBatchPipeline() {
       });
 
       ep.scriptItems = scriptRes.items;
+      ep.pedagogicalPlan = scriptRes.pedagogicalPlan || null;
       ep.scriptUsage = scriptRes.usage;
 
       completedScripts++;
@@ -1036,6 +1042,7 @@ async function retrieveBatch(jobId) {
           age: ep.age,
           duration: ep.duration,
           scriptItems: ep.scriptItems || [],
+          pedagogicalPlan: ep.pedagogicalPlan || null,
           audioBlob: mp3Blob,
           durationSeconds,
           cost: costData.totalCost,
@@ -1157,6 +1164,7 @@ function playEpisode(episode) {
   const catObj = CATEGORIES.find(c => c.name.toLowerCase() === episode.category?.toLowerCase());
   if (elements.playerIcon) elements.playerIcon.innerText = catObj ? catObj.icon : "🎙️";
 
+  renderPedagogicalPlan(episode);
   renderScriptDialogue(episode.scriptItems);
 }
 
@@ -1197,6 +1205,70 @@ async function shareCurrentAudio() {
   await shareOrDownloadAudio(state.activeEpisode.audioBlob, filename);
 }
 
+function renderPedagogicalPlan(episode) {
+  if (!elements.playerPedagogyCard) return;
+
+  const plan = episode.pedagogicalPlan;
+  let learningGoal = plan?.learning_goal || "";
+  let englishWords = plan?.english_words || [];
+
+  // Fallback: If no explicit pedagogicalPlan (e.g. legacy episodes), extract English words from script tags
+  if ((!englishWords || englishWords.length === 0) && Array.isArray(episode.scriptItems)) {
+    const extracted = [];
+    const seen = new Set();
+    episode.scriptItems.forEach(item => {
+      const matches = (item.text || "").matchAll(/\[American accent\]\s*'([^']+)'/gi);
+      for (const m of matches) {
+        const word = m[1].trim();
+        const lower = word.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          extracted.push({ english: word, french: "" });
+        }
+      }
+    });
+    englishWords = extracted;
+  }
+
+  // If completely empty, hide the card
+  if (!learningGoal && (!englishWords || englishWords.length === 0)) {
+    elements.playerPedagogyCard.classList.add('hidden');
+    return;
+  }
+
+  elements.playerPedagogyCard.classList.remove('hidden');
+
+  // Learning Goal
+  if (elements.playerLearningGoal) {
+    if (learningGoal) {
+      elements.playerLearningGoal.innerText = `💡 Objectif : ${learningGoal}`;
+      elements.playerLearningGoal.classList.remove('hidden');
+    } else {
+      elements.playerLearningGoal.classList.add('hidden');
+    }
+  }
+
+  // Words Badge
+  if (elements.playerWordsBadge) {
+    elements.playerWordsBadge.innerText = `${englishWords.length} mot${englishWords.length > 1 ? 's' : ''}`;
+  }
+
+  // Words Pills
+  if (elements.playerEnglishWords) {
+    elements.playerEnglishWords.innerHTML = '';
+    englishWords.forEach(w => {
+      const pill = document.createElement('div');
+      pill.className = "flex items-center gap-1.5 px-3 py-1.5 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-xs shadow-sm";
+      pill.innerHTML = `
+        <span class="text-xs">🇬🇧</span>
+        <span class="font-bold text-indigo-300 font-mono">${w.english}</span>
+        ${w.french ? `<span class="text-slate-400 text-[10px]">(${w.french})</span>` : ''}
+      `;
+      elements.playerEnglishWords.appendChild(pill);
+    });
+  }
+}
+
 function renderScriptDialogue(scriptItems) {
   if (!elements.scriptDialogueContainer) return;
   elements.scriptDialogueContainer.innerHTML = '';
@@ -1214,7 +1286,13 @@ function renderScriptDialogue(scriptItems) {
       : "p-3 bg-slate-950/50 rounded-2xl border border-amber-500/20";
     
     let formattedText = item.text || "";
+    // Vocal Bursts <laughs>, <gasp>, <sigh>, <chuckle>
+    formattedText = formattedText.replace(/<(laughs|gasp|sigh|chuckle|giggle|cough|snicker)>/gi, `<span class="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-bold">&lt;$1&gt;</span>`);
+    // Backchanneling |mhm|, |ouah|, |oh|, etc.
+    formattedText = formattedText.replace(/\|([^|]+)\|/g, `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-bold italic">|$1|</span>`);
+    // English bilingual words
     formattedText = formattedText.replace(/\[American accent\]\s*'([^']+)'/gi, `<span class="bg-indigo-500/30 text-indigo-200 px-1 py-0.5 rounded font-bold border border-indigo-500/40">$1</span>`);
+    // Steering cues
     formattedText = formattedText.replace(/\[(whispering|shouting|laughing|sighing|short pause)\]/gi, `<span class="text-indigo-400 font-mono text-[10px]">[$1]</span>`);
 
     div.innerHTML = `
