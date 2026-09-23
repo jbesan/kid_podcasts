@@ -60,11 +60,6 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <!-- Session Cost Pill -->
-      <div class="px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-xl flex items-center gap-1 text-xs text-emerald-400 font-mono">
-        <i class="fa-solid fa-coins text-[10px]"></i>
-        <span id="session-cost">0.00$</span>
-      </div>
       <!-- Settings Button -->
       <button onclick="openSettings()" class="w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 flex items-center justify-center transition-colors">
         <i class="fa-solid fa-gear text-xs"></i>
@@ -266,9 +261,15 @@
           <div id="player-icon" class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 via-orange-500 to-pink-500 flex items-center justify-center text-3xl shadow-xl shadow-orange-500/20 mb-2">
             🎙️
           </div>
-          <span id="player-category" class="px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold mb-1">
-            Nature
-          </span>
+          <div class="flex items-center justify-center gap-1.5 mb-1.5">
+            <span id="player-category" class="px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[10px] font-bold">
+              Nature
+            </span>
+            <span id="player-cost" class="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1">
+              <i class="fa-solid fa-coins text-[9px]"></i>
+              <span id="player-cost-val">0.00$</span>
+            </span>
+          </div>
           <h2 id="player-title" class="text-base font-extrabold text-white">Sujet de l'histoire</h2>
           <p id="player-meta" class="text-xs text-slate-400">Sophie & Marc • 7 minutes</p>
         </div>

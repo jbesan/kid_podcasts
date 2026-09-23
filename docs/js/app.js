@@ -99,6 +99,7 @@ function initDomElements() {
   elements.playerLearningGoal = document.getElementById('player-learning-goal');
   elements.playerEnglishWords = document.getElementById('player-english-words');
   elements.playerWordsBadge = document.getElementById('player-words-badge');
+  elements.playerCostVal = document.getElementById('player-cost-val');
 }
 
 // --- Initialization ---
@@ -1164,6 +1165,12 @@ function playEpisode(episode) {
   const catObj = CATEGORIES.find(c => c.name.toLowerCase() === episode.category?.toLowerCase());
   if (elements.playerIcon) elements.playerIcon.innerText = catObj ? catObj.icon : "🎙️";
 
+  const costVal = episode.cost != null ? episode.cost : 0;
+  const costFormatted = costVal > 0 
+    ? (costVal >= 0.01 ? `${costVal.toFixed(2)}$` : `${costVal.toFixed(3)}$`) 
+    : "0.00$";
+  if (elements.playerCostVal) elements.playerCostVal.innerText = costFormatted;
+
   renderPedagogicalPlan(episode);
   renderScriptDialogue(episode.scriptItems);
 }
@@ -1323,6 +1330,10 @@ async function refreshEpisodesList() {
     const catObj = CATEGORIES.find(c => c.name.toLowerCase() === ep.category?.toLowerCase());
     const icon = catObj ? catObj.icon : "🎙️";
     const mins = Math.round((ep.durationSeconds || ep.duration * 60) / 60);
+    const costVal = ep.cost != null ? ep.cost : 0;
+    const costFormatted = costVal > 0 
+      ? (costVal >= 0.01 ? `${costVal.toFixed(2)}$` : `${costVal.toFixed(3)}$`) 
+      : "0.00$";
 
     const card = document.createElement('div');
     card.className = "bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 hover:border-slate-700 transition-all";
@@ -1338,7 +1349,10 @@ async function refreshEpisodesList() {
           </div>
         </div>
         <div class="flex items-center gap-1.5">
-          <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">Prêt</span>
+          <span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1">
+            <i class="fa-solid fa-coins text-[9px]"></i>
+            <span>${costFormatted}</span>
+          </span>
           <button onclick="deleteEpisodeById('${ep.id}', event)" title="Supprimer cet épisode" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors">
             <i class="fa-solid fa-trash-can"></i>
           </button>
@@ -1351,7 +1365,7 @@ async function refreshEpisodesList() {
           <span>Écouter</span>
         </button>
 
-        <span class="text-[10px] font-mono text-slate-400">${(ep.cost || 0).toFixed(2)}$</span>
+        <span class="text-[10px] text-slate-500 font-medium">Prêt pour l'écoute</span>
 
         <div class="flex items-center gap-1">
           <!-- Direct download MP3 button for Mac / Yoto / Deezer -->
