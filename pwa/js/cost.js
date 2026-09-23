@@ -9,8 +9,10 @@ export const PRICING = {
     "gemini-2.5-flash": { in: 0.30, out: 2.50 }
   },
   tts: {
+    "gemini-3.8-flash-tts": { in: 0.50, out: 9.00 },
     "gemini-2.5-pro-preview-tts": { in: 1.25, out: 20.00 },
-    "gemini-2.5-flash-preview-tts": { in: 0.30, out: 10.00 }
+    "gemini-2.5-flash-preview-tts": { in: 0.30, out: 10.00 },
+    "gemini-3.1-flash-tts-preview": { in: 1.00, out: 20.00 }
   }
 };
 
@@ -19,13 +21,13 @@ export function calculateCost({
   tokensOutText = 0,
   textModel = "gemini-3.8-flash",
   audioDurationSeconds = 0,
-  ttsModel = "gemini-2.5-pro-preview-tts",
+  ttsModel = "gemini-3.8-flash-tts",
   audioInTokens = null,
   audioOutTokens = null,
   isBatch = false
 }) {
   const textRates = PRICING.text[textModel] || PRICING.text["gemini-3.8-flash"];
-  const ttsRates = PRICING.tts[ttsModel] || PRICING.tts["gemini-2.5-pro-preview-tts"];
+  const ttsRates = PRICING.tts[ttsModel] || PRICING.tts["gemini-3.8-flash-tts"];
   const batchDiscount = isBatch ? 0.5 : 1.0;
 
   // 1. Script generation cost

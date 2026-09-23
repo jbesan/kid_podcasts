@@ -13,6 +13,7 @@ PRICING = {
         "gemini-2.0-flash": {"in": 0.15, "out": 0.60},
     },
     "tts": {
+        "gemini-3.8-flash-tts": {"in": 0.50, "out": 9.00},
         "gemini-2.5-flash-preview-tts": {"in": 0.30, "out": 10.00},
         "gemini-2.5-pro-preview-tts": {"in": 1.25, "out": 20.00},
         "gemini-3.1-flash-tts-preview": {"in": 1.00, "out": 20.00},

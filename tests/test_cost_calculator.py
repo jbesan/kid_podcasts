@@ -51,3 +51,18 @@ def test_calculate_cost_unknown_model():
         audio_out_tokens=0,
     )
     assert res["text_cost"] == 11.25
+
+
+def test_calculate_cost_gemini_38_flash_tts():
+    """Test cost calculation with gemini-3.8-flash-tts rates."""
+    res = calculate_cost(
+        tokens_in_text=1_000_000,
+        tokens_out_text=1_000_000,
+        audio_duration_seconds=10,
+        text_model="gemini-3.8-flash",
+        tts_model="gemini-3.8-flash-tts",
+        audio_in_tokens=1_000_000,
+        audio_out_tokens=1_000_000,
+    )
+    # audio_cost = (1M * 0.50 + 1M * 9.00) / 1M = 9.50
+    assert res["audio_cost"] == 9.50

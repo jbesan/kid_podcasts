@@ -12,7 +12,7 @@ export function getSettings() {
   const defaults = {
     apiKey: '',
     scriptModel: 'gemini-3.8-flash',
-    ttsModel: 'gemini-2.5-pro-preview-tts',
+    ttsModel: 'gemini-3.8-flash-tts',
     kidsContext: 'Deux enfants curieux et dynamiques. Aiment les découvertes, la nature et les aventures.',
     targetAge: 6,
     duration: 7

@@ -1,4 +1,4 @@
-from config import DEFAULT_TRANSCRIPT_MODEL
+from config import DEFAULT_TRANSCRIPT_MODEL, DEFAULT_TTS_MODEL
 from models.state import AppState
 
 
@@ -58,7 +58,7 @@ def test_app_state_legacy_settings_reset():
         }
     )
     assert state.transcript_model == DEFAULT_TRANSCRIPT_MODEL
-    assert state.tts_model == "gemini-2.5-pro-preview-tts"
+    assert state.tts_model == DEFAULT_TTS_MODEL
 
 
 def test_app_state_hydrate_history():

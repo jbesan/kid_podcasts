@@ -1,7 +1,7 @@
 // Prompt templates and configuration for Kids Podcast PWA
 
 export const DEFAULT_TRANSCRIPT_MODEL = "gemini-3.8-flash";
-export const DEFAULT_TTS_MODEL = "gemini-2.5-pro-preview-tts";
+export const DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts";
 
 export const CATEGORIES = [
   { id: "nature", name: "Nature", icon: "🌿", desc: "Forêts, déserts, saisons, océans..." },
