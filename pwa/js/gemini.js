@@ -406,54 +406,7 @@ export async function checkBatchJobStatus({ apiKey, jobName, fullPayload = false
   }
 
   // Mode 2: Récupération complète (fullPayload = true)
-  console.log(`[KidsPodcasts Batch] 🔍 Étape 1/2 : Recherche d'un fichier résultat (responsesFile) pour ${cleanName}...`);
-  const metaUrl = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?${keyParam}&fields=name,done,error,metadata,response/responsesFile`;
-  const metaResp = await fetch(metaUrl, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey.trim()
-    }
-  });
-
-  if (!metaResp.ok) {
-    const errText = await metaResp.text();
-    throw new Error(`Erreur vérification métadonnées (${metaResp.status}): ${errText}`);
-  }
-
-  const metaText = await metaResp.text();
-  let metaData = {};
-  try {
-    metaData = JSON.parse(metaText);
-  } catch (err) {
-    console.warn(`[KidsPodcasts Batch] Parsing métadonnées échoué (${metaText.length} octets):`, err);
-  }
-
-  const rawState = metaData.state || metaData.metadata?.state || (metaData.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
-  const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-  const isDone = metaData.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
-
-  console.log(`[KidsPodcasts Batch] Métadonnées reçues pour ${cleanName}:`, {
-    done: isDone,
-    state: cleanState,
-    responsesFile: metaData.response?.responsesFile || null,
-    batchStats: metaData.metadata?.batchStats
-  });
-
-  // Cas 2A : Google a généré un fichier de réponses (JSONL)
-  if (metaData.response?.responsesFile) {
-    console.log(`[KidsPodcasts Batch] 📁 responsesFile trouvé : "${metaData.response.responsesFile}". Prêt pour téléchargement.`);
-    return {
-      jobName,
-      state: cleanState,
-      rawState,
-      done: isDone,
-      raw: metaData
-    };
-  }
-
-  // Cas 2B : Les réponses sont inlinées directement dans l'opération
-  console.log(`[KidsPodcasts Batch] 📦 Étape 2/2 : Pas de responsesFile séparé. Téléchargement des réponses inlinées depuis Google...`);
+  console.log(`[KidsPodcasts Batch] 🚀 Téléchargement complet du lot pour ${cleanName}...`);
   const fullUrl = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?${keyParam}&fields=name,done,error,metadata,response`;
 
   const fullResp = await fetch(fullUrl, {
@@ -464,17 +417,24 @@ export async function checkBatchJobStatus({ apiKey, jobName, fullPayload = false
     }
   });
 
-  console.log(`[KidsPodcasts Batch] Réponse HTTP Google API:`, {
+  const headerObj = {};
+  for (const [k, v] of fullResp.headers.entries()) {
+    headerObj[k] = v;
+  }
+  console.log(`[KidsPodcasts Batch] Réponse HTTP Google API reçue :`, {
     status: fullResp.status,
     statusText: fullResp.statusText,
-    contentType: fullResp.headers.get('content-type'),
-    contentLength: fullResp.headers.get('content-length'),
-    transferEncoding: fullResp.headers.get('transfer-encoding')
+    headers: headerObj
   });
 
   if (!fullResp.ok) {
     const errText = await fullResp.text();
-    throw new Error(`Erreur téléchargement payload (${fullResp.status}): ${errText}`);
+    let errMsg = errText;
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson.error?.message || errText;
+    } catch (_) {}
+    throw new Error(`Erreur téléchargement payload (${fullResp.status}): ${errMsg}`);
   }
 
   // Lecture du flux avec affichage de la progression
@@ -488,24 +448,38 @@ export async function checkBatchJobStatus({ apiKey, jobName, fullPayload = false
       if (done) break;
       totalBytes += value.length;
       fullText += decoder.decode(value, { stream: true });
-      if (totalBytes < 5 * 1024 * 1024 || totalBytes % (5 * 1024 * 1024) < 70000) {
-        console.log(`[KidsPodcasts Batch] Téléchargement flux en cours : ${(totalBytes / (1024 * 1024)).toFixed(2)} Mo reçus...`);
+      if (totalBytes < 5 * 1024 * 1024 || totalBytes % (5 * 1024 * 1024) < 150000) {
+        console.log(`[KidsPodcasts Batch] 📥 Réception des données : ${(totalBytes / (1024 * 1024)).toFixed(2)} Mo reçus...`);
       }
     }
     fullText += decoder.decode();
-    console.log(`[KidsPodcasts Batch] Téléchargement terminé : ${(totalBytes / (1024 * 1024)).toFixed(2)} Mo au total.`);
+    console.log(`[KidsPodcasts Batch] 📥 Téléchargement complet terminé : ${(totalBytes / (1024 * 1024)).toFixed(2)} Mo au total.`);
   } else {
     fullText = await fullResp.text();
+    console.log(`[KidsPodcasts Batch] 📥 Texte reçu via response.text() : ${(fullText.length / (1024 * 1024)).toFixed(2)} Mo.`);
   }
 
   if (!fullText || !fullText.trim()) {
-    console.error(`[KidsPodcasts Batch] ⚠️ Réponse reçue vide (0 octet).`);
-    throw new Error(`Google API a renvoyé un corps vide (0 octet). Le volume des audios inlinés dépasse probablement le buffer HTTP de Google Frontend (GFE). Statut: ${fullResp.status}.`);
+    console.error(`[KidsPodcasts Batch] ⚠️ Réponse reçue vide (0 octet). En-têtes :`, headerObj);
+    throw new Error(`Google API a renvoyé un corps vide (0 octet). Statut HTTP : ${fullResp.status}.`);
   }
 
-  console.log(`[KidsPodcasts Batch] Décodage JSON du payload (${(fullText.length / (1024 * 1024)).toFixed(2)} Mo)...`);
+  console.log(`[KidsPodcasts Batch] ⚙️ Décodage JSON du payload (${(fullText.length / (1024 * 1024)).toFixed(2)} Mo)...`);
   const fullData = JSON.parse(fullText);
   console.log(`[KidsPodcasts Batch] ✅ Payload JSON décodé avec succès !`);
+
+  const rawState = fullData.state || fullData.metadata?.state || (fullData.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
+  const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+  const isDone = fullData.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
+
+  console.log(`[KidsPodcasts Batch] Détails du lot décodé :`, {
+    done: isDone,
+    state: cleanState,
+    hasResponse: Boolean(fullData.response),
+    responseKeys: fullData.response ? Object.keys(fullData.response) : [],
+    responsesFile: fullData.response?.responsesFile || null,
+    inlinedResponsesCount: Array.isArray(fullData.response?.inlinedResponses) ? fullData.response.inlinedResponses.length : 0
+  });
 
   return {
     jobName,
