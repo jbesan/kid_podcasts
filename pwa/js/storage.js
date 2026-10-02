@@ -71,6 +71,7 @@ export async function saveEpisode(episode) {
       age: episode.age,
       duration: episode.duration,
       scriptItems: episode.scriptItems || [],
+      pedagogicalPlan: episode.pedagogicalPlan || null,
       audioBlob: episode.audioBlob || null,
       durationSeconds: episode.durationSeconds || 0,
       cost: episode.cost || 0,

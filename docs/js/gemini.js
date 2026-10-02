@@ -340,32 +340,72 @@ export async function createTtsBatchJob({
 
 /**
  * Checks the status of a Gemini Batch job.
+ * @param {Object} options
+ * @param {string} options.apiKey
+ * @param {string} options.jobName
+ * @param {boolean} [options.fullPayload=false] - If false, uses field mask &fields=name,done,error,metadata to prevent downloading massive inlined audio Base64 strings.
  */
-export async function checkBatchJobStatus({ apiKey, jobName }) {
+export async function checkBatchJobStatus({ apiKey, jobName, fullPayload = false }) {
   if (!apiKey || !jobName) {
     throw new Error("Clé API ou identifiant de batch manquant.");
   }
 
   // Strip leading slash if any
   const cleanName = jobName.startsWith('/') ? jobName.substring(1) : jobName;
-  const url = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?key=${encodeURIComponent(apiKey.trim())}`;
+  let url = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?key=${encodeURIComponent(apiKey.trim())}`;
+  if (!fullPayload) {
+    // Lightweight check: only request status and metadata (~300 bytes vs 50-150MB of inlined audio Base64)
+    url += `&fields=name,done,error,metadata`;
+  }
 
   const response = await fetch(url, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" }
+    method: "GET"
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Erreur lors de la vérification du batch (${response.status}): ${errText}`);
+    let errMsg = errText;
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson.error?.message || errText;
+    } catch (_) {}
+    throw new Error(`Erreur lors de la vérification du batch (${response.status}): ${errMsg}`);
   }
 
-  const data = await response.json();
+  const text = await response.text();
+  if (!text || !text.trim()) {
+    console.warn(`[KidsPodcasts Batch] Réponse vide reçue de l'API pour ${cleanName} (HTTP ${response.status}). En attente de synchronisation Google.`);
+    return {
+      jobName,
+      state: "RUNNING",
+      rawState: "BATCH_STATE_RUNNING",
+      done: false,
+      raw: {}
+    };
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    console.warn(`[KidsPodcasts Batch] Erreur de parsing JSON pour ${cleanName} (${text.length} chars reçus):`, err);
+    if (!fullPayload) {
+      return {
+        jobName,
+        state: "RUNNING",
+        rawState: "BATCH_STATE_RUNNING",
+        done: false,
+        raw: {}
+      };
+    }
+    throw new Error(`Réponse JSON incomplète ou invalide reçue de Google (${err.message}). Taille : ${text.length} octets.`);
+  }
+
   const rawState = data.state || data.metadata?.state || (data.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
   const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
   const isDone = data.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
 
-  console.log(`[KidsPodcasts Batch] checkBatchJobStatus(${cleanName}):`, {
+  console.log(`[KidsPodcasts Batch] checkBatchJobStatus(${cleanName}, fullPayload=${fullPayload}):`, {
     rawState,
     normalizedState: cleanState,
     done: isDone,

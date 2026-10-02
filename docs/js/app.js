@@ -756,6 +756,8 @@ async function copyBatchId(id, btnElement) {
 
 // --- Batches Feed & Polling ---
 let batchPollInterval = null;
+let isCheckingBatches = false;
+let lastBatchCheckTimestamp = 0;
 
 function updateLastPollIndicator() {
   const el = document.getElementById('batch-last-poll-text');
@@ -806,6 +808,9 @@ function stopBatchPolling() {
 function setupVisibilityListener() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
+      // Throttle: don't check if checked less than 15s ago
+      if (Date.now() - lastBatchCheckTimestamp < 15000) return;
+
       const jobs = getAllBatchJobs();
       const hasActive = jobs.some(j => {
         const st = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
@@ -903,35 +908,46 @@ async function checkAllBatchesStatus(manual = false) {
   const settings = getSettings();
   if (!settings.apiKey || jobs.length === 0) return;
 
+  if (isCheckingBatches) {
+    console.log("[KidsPodcasts Batch] Vérification déjà en cours, requête ignorée.");
+    return;
+  }
+  isCheckingBatches = true;
+
   const refreshIcon = document.getElementById('batch-refresh-icon');
   if (manual && refreshIcon) refreshIcon.classList.add('fa-spin');
 
   let updatedCount = 0;
   let newlySucceededCount = 0;
 
-  console.log(`[KidsPodcasts Batch] checkAllBatchesStatus(manual=${manual}). Scanning ${jobs.length} jobs...`);
+  try {
+    console.log(`[KidsPodcasts Batch] checkAllBatchesStatus(manual=${manual}). Scanning ${jobs.length} jobs...`);
 
-  for (const job of jobs) {
-    const currentSt = (job.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-    if (currentSt !== "SUCCEEDED" && currentSt !== "FAILED" && currentSt !== "CANCELLED" && currentSt !== "EXPIRED") {
-      try {
-        console.log(`[KidsPodcasts Batch] Querying Google API for ${job.id} (current state: ${currentSt})...`);
-        const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id });
-        const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-        if (newSt !== currentSt) {
-          console.log(`[KidsPodcasts Batch] State transition for ${job.id}: ${currentSt} -> ${newSt}`);
-          updateBatchJob(job.id, { state: newSt, updatedAt: Date.now() });
-          updatedCount++;
-          if (newSt === "SUCCEEDED") newlySucceededCount++;
+    for (const job of jobs) {
+      const currentSt = (job.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+      if (currentSt !== "SUCCEEDED" && currentSt !== "FAILED" && currentSt !== "CANCELLED" && currentSt !== "EXPIRED") {
+        try {
+          console.log(`[KidsPodcasts Batch] Querying Google API for ${job.id} (current state: ${currentSt})...`);
+          const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id, fullPayload: false });
+          const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+          if (newSt !== currentSt) {
+            console.log(`[KidsPodcasts Batch] State transition for ${job.id}: ${currentSt} -> ${newSt}`);
+            updateBatchJob(job.id, { state: newSt, updatedAt: Date.now() });
+            updatedCount++;
+            if (newSt === "SUCCEEDED") newlySucceededCount++;
+          }
+        } catch (e) {
+          console.warn(`[KidsPodcasts Batch] Erreur vérification ${job.id}:`, e);
         }
-      } catch (e) {
-        console.warn(`[KidsPodcasts Batch] Erreur vérification ${job.id}:`, e);
       }
     }
-  }
 
-  await refreshBatchJobsUI();
-  updateLastPollIndicator();
+    await refreshBatchJobsUI();
+    updateLastPollIndicator();
+  } finally {
+    isCheckingBatches = false;
+    lastBatchCheckTimestamp = Date.now();
+  }
 
   if (manual && refreshIcon) {
     setTimeout(() => refreshIcon.classList.remove('fa-spin'), 600);
@@ -964,7 +980,7 @@ async function checkSingleBatch(jobId, btnElement) {
 
   try {
     console.log(`[KidsPodcasts Batch] checkSingleBatch clicked for ${jobId}...`);
-    const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
+    const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId, fullPayload: false });
     const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
     console.log(`[KidsPodcasts Batch] Check result for ${jobId}: ${newSt}`, res);
 
@@ -996,8 +1012,8 @@ async function retrieveBatch(jobId) {
   console.log(`[KidsPodcasts Batch] retrieveBatch triggered for ${jobId}. Episodes to download: ${job.episodes.length}`);
 
   try {
-    showToast("Récupération et conversion des MP3...", "info", 4000);
-    const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
+    showToast("Téléchargement et conversion des données audio...", "info", 4000);
+    const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId, fullPayload: true });
     const st = (checkRes.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
     console.log(`[KidsPodcasts Batch] Verification before retrieve: ${st}`);
 

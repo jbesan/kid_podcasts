@@ -95,6 +95,11 @@ function initDomElements() {
   elements.btnPlayPause = document.getElementById('btn-play-pause');
   elements.btnSpeed = document.getElementById('btn-speed');
   elements.scriptDialogueContainer = document.getElementById('script-dialogue-container');
+  elements.playerPedagogyCard = document.getElementById('player-pedagogy-card');
+  elements.playerLearningGoal = document.getElementById('player-learning-goal');
+  elements.playerEnglishWords = document.getElementById('player-english-words');
+  elements.playerWordsBadge = document.getElementById('player-words-badge');
+  elements.playerCostVal = document.getElementById('player-cost-val');
 }
 
 // --- Initialization ---
@@ -517,6 +522,7 @@ async function startDirectGeneration() {
       age: state.age,
       duration: state.duration,
       scriptItems: scriptResult.items,
+      pedagogicalPlan: scriptResult.pedagogicalPlan || null,
       audioBlob: audioResult.audioBlob,
       durationSeconds: audioResult.durationSeconds,
       cost: costData.totalCost,
@@ -613,6 +619,7 @@ async function startBatchPipeline() {
       });
 
       ep.scriptItems = scriptRes.items;
+      ep.pedagogicalPlan = scriptRes.pedagogicalPlan || null;
       ep.scriptUsage = scriptRes.usage;
 
       completedScripts++;
@@ -749,6 +756,8 @@ async function copyBatchId(id, btnElement) {
 
 // --- Batches Feed & Polling ---
 let batchPollInterval = null;
+let isCheckingBatches = false;
+let lastBatchCheckTimestamp = 0;
 
 function updateLastPollIndicator() {
   const el = document.getElementById('batch-last-poll-text');
@@ -799,6 +808,9 @@ function stopBatchPolling() {
 function setupVisibilityListener() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
+      // Throttle: don't check if checked less than 15s ago
+      if (Date.now() - lastBatchCheckTimestamp < 15000) return;
+
       const jobs = getAllBatchJobs();
       const hasActive = jobs.some(j => {
         const st = (j.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
@@ -896,35 +908,46 @@ async function checkAllBatchesStatus(manual = false) {
   const settings = getSettings();
   if (!settings.apiKey || jobs.length === 0) return;
 
+  if (isCheckingBatches) {
+    console.log("[KidsPodcasts Batch] Vérification déjà en cours, requête ignorée.");
+    return;
+  }
+  isCheckingBatches = true;
+
   const refreshIcon = document.getElementById('batch-refresh-icon');
   if (manual && refreshIcon) refreshIcon.classList.add('fa-spin');
 
   let updatedCount = 0;
   let newlySucceededCount = 0;
 
-  console.log(`[KidsPodcasts Batch] checkAllBatchesStatus(manual=${manual}). Scanning ${jobs.length} jobs...`);
+  try {
+    console.log(`[KidsPodcasts Batch] checkAllBatchesStatus(manual=${manual}). Scanning ${jobs.length} jobs...`);
 
-  for (const job of jobs) {
-    const currentSt = (job.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-    if (currentSt !== "SUCCEEDED" && currentSt !== "FAILED" && currentSt !== "CANCELLED" && currentSt !== "EXPIRED") {
-      try {
-        console.log(`[KidsPodcasts Batch] Querying Google API for ${job.id} (current state: ${currentSt})...`);
-        const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id });
-        const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-        if (newSt !== currentSt) {
-          console.log(`[KidsPodcasts Batch] State transition for ${job.id}: ${currentSt} -> ${newSt}`);
-          updateBatchJob(job.id, { state: newSt, updatedAt: Date.now() });
-          updatedCount++;
-          if (newSt === "SUCCEEDED") newlySucceededCount++;
+    for (const job of jobs) {
+      const currentSt = (job.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+      if (currentSt !== "SUCCEEDED" && currentSt !== "FAILED" && currentSt !== "CANCELLED" && currentSt !== "EXPIRED") {
+        try {
+          console.log(`[KidsPodcasts Batch] Querying Google API for ${job.id} (current state: ${currentSt})...`);
+          const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: job.id, fullPayload: false });
+          const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+          if (newSt !== currentSt) {
+            console.log(`[KidsPodcasts Batch] State transition for ${job.id}: ${currentSt} -> ${newSt}`);
+            updateBatchJob(job.id, { state: newSt, updatedAt: Date.now() });
+            updatedCount++;
+            if (newSt === "SUCCEEDED") newlySucceededCount++;
+          }
+        } catch (e) {
+          console.warn(`[KidsPodcasts Batch] Erreur vérification ${job.id}:`, e);
         }
-      } catch (e) {
-        console.warn(`[KidsPodcasts Batch] Erreur vérification ${job.id}:`, e);
       }
     }
-  }
 
-  await refreshBatchJobsUI();
-  updateLastPollIndicator();
+    await refreshBatchJobsUI();
+    updateLastPollIndicator();
+  } finally {
+    isCheckingBatches = false;
+    lastBatchCheckTimestamp = Date.now();
+  }
 
   if (manual && refreshIcon) {
     setTimeout(() => refreshIcon.classList.remove('fa-spin'), 600);
@@ -957,7 +980,7 @@ async function checkSingleBatch(jobId, btnElement) {
 
   try {
     console.log(`[KidsPodcasts Batch] checkSingleBatch clicked for ${jobId}...`);
-    const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
+    const res = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId, fullPayload: false });
     const newSt = (res.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
     console.log(`[KidsPodcasts Batch] Check result for ${jobId}: ${newSt}`, res);
 
@@ -989,8 +1012,8 @@ async function retrieveBatch(jobId) {
   console.log(`[KidsPodcasts Batch] retrieveBatch triggered for ${jobId}. Episodes to download: ${job.episodes.length}`);
 
   try {
-    showToast("Récupération et conversion des MP3...", "info", 4000);
-    const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId });
+    showToast("Téléchargement et conversion des données audio...", "info", 4000);
+    const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId, fullPayload: true });
     const st = (checkRes.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
     console.log(`[KidsPodcasts Batch] Verification before retrieve: ${st}`);
 
@@ -1036,6 +1059,7 @@ async function retrieveBatch(jobId) {
           age: ep.age,
           duration: ep.duration,
           scriptItems: ep.scriptItems || [],
+          pedagogicalPlan: ep.pedagogicalPlan || null,
           audioBlob: mp3Blob,
           durationSeconds,
           cost: costData.totalCost,
@@ -1157,6 +1181,13 @@ function playEpisode(episode) {
   const catObj = CATEGORIES.find(c => c.name.toLowerCase() === episode.category?.toLowerCase());
   if (elements.playerIcon) elements.playerIcon.innerText = catObj ? catObj.icon : "🎙️";
 
+  const costVal = episode.cost != null ? episode.cost : 0;
+  const costFormatted = costVal > 0 
+    ? (costVal >= 0.01 ? `${costVal.toFixed(2)}$` : `${costVal.toFixed(3)}$`) 
+    : "0.00$";
+  if (elements.playerCostVal) elements.playerCostVal.innerText = costFormatted;
+
+  renderPedagogicalPlan(episode);
   renderScriptDialogue(episode.scriptItems);
 }
 
@@ -1197,6 +1228,70 @@ async function shareCurrentAudio() {
   await shareOrDownloadAudio(state.activeEpisode.audioBlob, filename);
 }
 
+function renderPedagogicalPlan(episode) {
+  if (!elements.playerPedagogyCard) return;
+
+  const plan = episode.pedagogicalPlan;
+  let learningGoal = plan?.learning_goal || "";
+  let englishWords = plan?.english_words || [];
+
+  // Fallback: If no explicit pedagogicalPlan (e.g. legacy episodes), extract English words from script tags
+  if ((!englishWords || englishWords.length === 0) && Array.isArray(episode.scriptItems)) {
+    const extracted = [];
+    const seen = new Set();
+    episode.scriptItems.forEach(item => {
+      const matches = (item.text || "").matchAll(/\[American accent\]\s*'([^']+)'/gi);
+      for (const m of matches) {
+        const word = m[1].trim();
+        const lower = word.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          extracted.push({ english: word, french: "" });
+        }
+      }
+    });
+    englishWords = extracted;
+  }
+
+  // If completely empty, hide the card
+  if (!learningGoal && (!englishWords || englishWords.length === 0)) {
+    elements.playerPedagogyCard.classList.add('hidden');
+    return;
+  }
+
+  elements.playerPedagogyCard.classList.remove('hidden');
+
+  // Learning Goal
+  if (elements.playerLearningGoal) {
+    if (learningGoal) {
+      elements.playerLearningGoal.innerText = `💡 Objectif : ${learningGoal}`;
+      elements.playerLearningGoal.classList.remove('hidden');
+    } else {
+      elements.playerLearningGoal.classList.add('hidden');
+    }
+  }
+
+  // Words Badge
+  if (elements.playerWordsBadge) {
+    elements.playerWordsBadge.innerText = `${englishWords.length} mot${englishWords.length > 1 ? 's' : ''}`;
+  }
+
+  // Words Pills
+  if (elements.playerEnglishWords) {
+    elements.playerEnglishWords.innerHTML = '';
+    englishWords.forEach(w => {
+      const pill = document.createElement('div');
+      pill.className = "flex items-center gap-1.5 px-3 py-1.5 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-xs shadow-sm";
+      pill.innerHTML = `
+        <span class="text-xs">🇬🇧</span>
+        <span class="font-bold text-indigo-300 font-mono">${w.english}</span>
+        ${w.french ? `<span class="text-slate-400 text-[10px]">(${w.french})</span>` : ''}
+      `;
+      elements.playerEnglishWords.appendChild(pill);
+    });
+  }
+}
+
 function renderScriptDialogue(scriptItems) {
   if (!elements.scriptDialogueContainer) return;
   elements.scriptDialogueContainer.innerHTML = '';
@@ -1214,7 +1309,13 @@ function renderScriptDialogue(scriptItems) {
       : "p-3 bg-slate-950/50 rounded-2xl border border-amber-500/20";
     
     let formattedText = item.text || "";
+    // Vocal Bursts <laughs>, <gasp>, <sigh>, <chuckle>
+    formattedText = formattedText.replace(/<(laughs|gasp|sigh|chuckle|giggle|cough|snicker)>/gi, `<span class="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-bold">&lt;$1&gt;</span>`);
+    // Backchanneling |mhm|, |ouah|, |oh|, etc.
+    formattedText = formattedText.replace(/\|([^|]+)\|/g, `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-bold italic">|$1|</span>`);
+    // English bilingual words
     formattedText = formattedText.replace(/\[American accent\]\s*'([^']+)'/gi, `<span class="bg-indigo-500/30 text-indigo-200 px-1 py-0.5 rounded font-bold border border-indigo-500/40">$1</span>`);
+    // Steering cues
     formattedText = formattedText.replace(/\[(whispering|shouting|laughing|sighing|short pause)\]/gi, `<span class="text-indigo-400 font-mono text-[10px]">[$1]</span>`);
 
     div.innerHTML = `
@@ -1245,6 +1346,10 @@ async function refreshEpisodesList() {
     const catObj = CATEGORIES.find(c => c.name.toLowerCase() === ep.category?.toLowerCase());
     const icon = catObj ? catObj.icon : "🎙️";
     const mins = Math.round((ep.durationSeconds || ep.duration * 60) / 60);
+    const costVal = ep.cost != null ? ep.cost : 0;
+    const costFormatted = costVal > 0 
+      ? (costVal >= 0.01 ? `${costVal.toFixed(2)}$` : `${costVal.toFixed(3)}$`) 
+      : "0.00$";
 
     const card = document.createElement('div');
     card.className = "bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 hover:border-slate-700 transition-all";
@@ -1260,7 +1365,10 @@ async function refreshEpisodesList() {
           </div>
         </div>
         <div class="flex items-center gap-1.5">
-          <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">Prêt</span>
+          <span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold font-mono flex items-center gap-1">
+            <i class="fa-solid fa-coins text-[9px]"></i>
+            <span>${costFormatted}</span>
+          </span>
           <button onclick="deleteEpisodeById('${ep.id}', event)" title="Supprimer cet épisode" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors">
             <i class="fa-solid fa-trash-can"></i>
           </button>
@@ -1273,7 +1381,7 @@ async function refreshEpisodesList() {
           <span>Écouter</span>
         </button>
 
-        <span class="text-[10px] font-mono text-slate-400">${(ep.cost || 0).toFixed(2)}$</span>
+        <span class="text-[10px] text-slate-500 font-medium">Prêt pour l'écoute</span>
 
         <div class="flex items-center gap-1">
           <!-- Direct download MP3 button for Mac / Yoto / Deezer -->
