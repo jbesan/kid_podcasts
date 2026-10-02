@@ -339,57 +339,37 @@ export async function createTtsBatchJob({
 }
 
 /**
- * Checks the status of a Gemini Batch job.
+ * Checks the status of a Gemini Batch job or retrieves its full payload.
  * @param {Object} options
  * @param {string} options.apiKey
  * @param {string} options.jobName
- * @param {boolean} [options.fullPayload=false] - If false, uses field mask &fields=name,done,error,metadata to prevent downloading massive inlined audio Base64 strings.
+ * @param {boolean} [options.fullPayload=false] - If false, uses field mask &fields=name,done,error,metadata for fast polling. If true, detects responsesFile or downloads inlined responses with stream logging.
  */
 export async function checkBatchJobStatus({ apiKey, jobName, fullPayload = false }) {
   if (!apiKey || !jobName) {
     throw new Error("Clé API ou identifiant de batch manquant.");
   }
 
-  // Strip leading slash if any
   const cleanName = jobName.startsWith('/') ? jobName.substring(1) : jobName;
-  let url = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?key=${encodeURIComponent(apiKey.trim())}`;
+  const keyParam = `key=${encodeURIComponent(apiKey.trim())}`;
+
+  // Mode 1: Polling léger (fullPayload = false)
   if (!fullPayload) {
-    // Lightweight check: only request status and metadata (~300 bytes vs 50-150MB of inlined audio Base64)
-    url += `&fields=name,done,error,metadata`;
-  }
+    const url = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?${keyParam}&fields=name,done,error,metadata`;
+    const response = await fetch(url, { method: "GET" });
 
-  const response = await fetch(url, {
-    method: "GET"
-  });
+    if (!response.ok) {
+      const errText = await response.text();
+      let errMsg = errText;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.error?.message || errText;
+      } catch (_) {}
+      throw new Error(`Erreur lors de la vérification du batch (${response.status}): ${errMsg}`);
+    }
 
-  if (!response.ok) {
-    const errText = await response.text();
-    let errMsg = errText;
-    try {
-      const errJson = JSON.parse(errText);
-      errMsg = errJson.error?.message || errText;
-    } catch (_) {}
-    throw new Error(`Erreur lors de la vérification du batch (${response.status}): ${errMsg}`);
-  }
-
-  const text = await response.text();
-  if (!text || !text.trim()) {
-    console.warn(`[KidsPodcasts Batch] Réponse vide reçue de l'API pour ${cleanName} (HTTP ${response.status}). En attente de synchronisation Google.`);
-    return {
-      jobName,
-      state: "RUNNING",
-      rawState: "BATCH_STATE_RUNNING",
-      done: false,
-      raw: {}
-    };
-  }
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (err) {
-    console.warn(`[KidsPodcasts Batch] Erreur de parsing JSON pour ${cleanName} (${text.length} chars reçus):`, err);
-    if (!fullPayload) {
+    const text = await response.text();
+    if (!text || !text.trim()) {
       return {
         jobName,
         state: "RUNNING",
@@ -398,26 +378,141 @@ export async function checkBatchJobStatus({ apiKey, jobName, fullPayload = false
         raw: {}
       };
     }
-    throw new Error(`Réponse JSON incomplète ou invalide reçue de Google (${err.message}). Taille : ${text.length} octets.`);
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return {
+        jobName,
+        state: "RUNNING",
+        rawState: "BATCH_STATE_RUNNING",
+        done: false,
+        raw: {}
+      };
+    }
+
+    const rawState = data.state || data.metadata?.state || (data.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
+    const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+    const isDone = data.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
+
+    return {
+      jobName,
+      state: cleanState,
+      rawState,
+      done: isDone,
+      raw: data
+    };
   }
 
-  const rawState = data.state || data.metadata?.state || (data.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
-  const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-  const isDone = data.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
-
-  console.log(`[KidsPodcasts Batch] checkBatchJobStatus(${cleanName}, fullPayload=${fullPayload}):`, {
-    rawState,
-    normalizedState: cleanState,
-    done: isDone,
-    stats: data.metadata?.batchStats
+  // Mode 2: Récupération complète (fullPayload = true)
+  console.log(`[KidsPodcasts Batch] 🔍 Étape 1/2 : Recherche d'un fichier résultat (responsesFile) pour ${cleanName}...`);
+  const metaUrl = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?${keyParam}&fields=name,done,error,metadata,response/responsesFile`;
+  const metaResp = await fetch(metaUrl, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey.trim()
+    }
   });
+
+  if (!metaResp.ok) {
+    const errText = await metaResp.text();
+    throw new Error(`Erreur vérification métadonnées (${metaResp.status}): ${errText}`);
+  }
+
+  const metaText = await metaResp.text();
+  let metaData = {};
+  try {
+    metaData = JSON.parse(metaText);
+  } catch (err) {
+    console.warn(`[KidsPodcasts Batch] Parsing métadonnées échoué (${metaText.length} octets):`, err);
+  }
+
+  const rawState = metaData.state || metaData.metadata?.state || (metaData.done ? "BATCH_STATE_SUCCEEDED" : "BATCH_STATE_RUNNING");
+  const cleanState = rawState.replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
+  const isDone = metaData.done === true || cleanState === "SUCCEEDED" || cleanState === "FAILED" || cleanState === "CANCELLED";
+
+  console.log(`[KidsPodcasts Batch] Métadonnées reçues pour ${cleanName}:`, {
+    done: isDone,
+    state: cleanState,
+    responsesFile: metaData.response?.responsesFile || null,
+    batchStats: metaData.metadata?.batchStats
+  });
+
+  // Cas 2A : Google a généré un fichier de réponses (JSONL)
+  if (metaData.response?.responsesFile) {
+    console.log(`[KidsPodcasts Batch] 📁 responsesFile trouvé : "${metaData.response.responsesFile}". Prêt pour téléchargement.`);
+    return {
+      jobName,
+      state: cleanState,
+      rawState,
+      done: isDone,
+      raw: metaData
+    };
+  }
+
+  // Cas 2B : Les réponses sont inlinées directement dans l'opération
+  console.log(`[KidsPodcasts Batch] 📦 Étape 2/2 : Pas de responsesFile séparé. Téléchargement des réponses inlinées depuis Google...`);
+  const fullUrl = `https://generativelanguage.googleapis.com/v1beta/${cleanName}?${keyParam}&fields=name,done,error,metadata,response`;
+
+  const fullResp = await fetch(fullUrl, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey.trim()
+    }
+  });
+
+  console.log(`[KidsPodcasts Batch] Réponse HTTP Google API:`, {
+    status: fullResp.status,
+    statusText: fullResp.statusText,
+    contentType: fullResp.headers.get('content-type'),
+    contentLength: fullResp.headers.get('content-length'),
+    transferEncoding: fullResp.headers.get('transfer-encoding')
+  });
+
+  if (!fullResp.ok) {
+    const errText = await fullResp.text();
+    throw new Error(`Erreur téléchargement payload (${fullResp.status}): ${errText}`);
+  }
+
+  // Lecture du flux avec affichage de la progression
+  let fullText = "";
+  if (fullResp.body && fullResp.body.getReader) {
+    const reader = fullResp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let totalBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.length;
+      fullText += decoder.decode(value, { stream: true });
+      if (totalBytes < 5 * 1024 * 1024 || totalBytes % (5 * 1024 * 1024) < 70000) {
+        console.log(`[KidsPodcasts Batch] Téléchargement flux en cours : ${(totalBytes / (1024 * 1024)).toFixed(2)} Mo reçus...`);
+      }
+    }
+    fullText += decoder.decode();
+    console.log(`[KidsPodcasts Batch] Téléchargement terminé : ${(totalBytes / (1024 * 1024)).toFixed(2)} Mo au total.`);
+  } else {
+    fullText = await fullResp.text();
+  }
+
+  if (!fullText || !fullText.trim()) {
+    console.error(`[KidsPodcasts Batch] ⚠️ Réponse reçue vide (0 octet).`);
+    throw new Error(`Google API a renvoyé un corps vide (0 octet). Le volume des audios inlinés dépasse probablement le buffer HTTP de Google Frontend (GFE). Statut: ${fullResp.status}.`);
+  }
+
+  console.log(`[KidsPodcasts Batch] Décodage JSON du payload (${(fullText.length / (1024 * 1024)).toFixed(2)} Mo)...`);
+  const fullData = JSON.parse(fullText);
+  console.log(`[KidsPodcasts Batch] ✅ Payload JSON décodé avec succès !`);
 
   return {
     jobName,
     state: cleanState,
     rawState,
     done: isDone,
-    raw: data
+    raw: fullData
   };
 }
 

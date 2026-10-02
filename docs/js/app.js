@@ -1007,40 +1007,54 @@ async function retrieveBatch(jobId) {
   const settings = getSettings();
   const jobs = getAllBatchJobs();
   const job = jobs.find(j => j.id === jobId);
-  if (!job) return;
+  if (!job) {
+    console.error(`[KidsPodcasts Batch] ❌ Job ${jobId} introuvable dans le stockage local.`);
+    showToast("Ce batch est introuvable.", "error");
+    return;
+  }
 
-  console.log(`[KidsPodcasts Batch] retrieveBatch triggered for ${jobId}. Episodes to download: ${job.episodes.length}`);
+  const totalEp = job.episodes?.length || 0;
+  console.log(`[KidsPodcasts Batch] ==========================================`);
+  console.log(`[KidsPodcasts Batch] 🚀 retrieveBatch déclenché pour ${jobId}`);
+  console.log(`[KidsPodcasts Batch] 📋 Nombre d'épisodes attendus : ${totalEp}`);
+  console.log(`[KidsPodcasts Batch] ==========================================`);
 
   try {
-    showToast("Téléchargement et conversion des données audio...", "info", 4000);
+    showToast(`🔍 Récupération des données du batch (${totalEp} épisodes)...`, "info", 5000);
+
     const checkRes = await checkBatchJobStatus({ apiKey: settings.apiKey, jobName: jobId, fullPayload: true });
     const st = (checkRes.state || '').replace('BATCH_STATE_', '').replace('JOB_STATE_', '');
-    console.log(`[KidsPodcasts Batch] Verification before retrieve: ${st}`);
+    console.log(`[KidsPodcasts Batch] 📊 Statut retourné par l'API : "${st}" (done=${checkRes.done})`);
 
-    if (st !== "SUCCEEDED") {
+    if (st !== "SUCCEEDED" && !checkRes.done && job.state !== "SUCCEEDED") {
+      console.warn(`[KidsPodcasts Batch] ⚠️ Le batch n'est pas encore SUCCEEDED (${st}). Annulation.`);
       showToast(`Ce batch n'est pas encore terminé (${st}).`, "warning");
       return;
     }
 
+    showToast("📦 Analyse des données audio reçues...", "info", 3000);
+    console.log(`[KidsPodcasts Batch] ⚙️ Extraction des résultats audio via fetchBatchJobResults...`);
     const results = await fetchBatchJobResults({ apiKey: settings.apiKey, batchData: checkRes.raw });
-    console.log(`[KidsPodcasts Batch] Successfully extracted ${results.length} results from batch.`);
+    console.log(`[KidsPodcasts Batch] ✅ ${results.length} résultats bruts extraits du lot.`);
+
     let savedCount = 0;
 
-    for (let i = 0; i < job.episodes.length; i++) {
+    for (let i = 0; i < totalEp; i++) {
       const ep = job.episodes[i];
       const res = results.find(r => r.episodeId === ep.id) || results[i];
 
-      console.log(`[KidsPodcasts Batch] Processing episode ${i + 1}/${job.episodes.length}: "${ep.theme}" (${ep.category})...`, {
-        foundResult: Boolean(res),
-        hasAudio: Boolean(res?.audioBase64),
-        audioLength: res?.audioBase64?.length
-      });
+      console.log(`[KidsPodcasts Batch] ------------------------------------------`);
+      console.log(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] Traitement épisode : "${ep.theme}" (${ep.category})`);
+      console.log(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] Données audio trouvées : ${Boolean(res?.audioBase64)} (taille Base64 : ${res?.audioBase64 ? res.audioBase64.length : 0} caractères)`);
 
       if (res && res.audioBase64) {
-        showToast(`Conversion MP3 (${i + 1}/${job.episodes.length}) : ${ep.theme}...`, "info", 2000);
+        showToast(`Conversion MP3 (${i + 1}/${totalEp}) : ${ep.theme}...`, "info", 2500);
+
+        console.log(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] Encodage MP3 (lamejs 24kHz / 128kbps)...`);
         const mp3Blob = pcmBase64ToMp3Blob(res.audioBase64, 24000, 128);
         const binaryString = window.atob(res.audioBase64);
         const durationSeconds = getPcmDurationSeconds(binaryString.length, 24000, 1, 16);
+        console.log(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] Encodage réussi : durée ${durationSeconds}s, taille blob : ${(mp3Blob.size / 1024).toFixed(1)} Ko.`);
 
         const costData = calculateCost({
           tokensInText: ep.scriptUsage?.promptTokens || 0,
@@ -1053,6 +1067,7 @@ async function retrieveBatch(jobId) {
           isBatch: true
         });
 
+        console.log(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] Sauvegarde dans la base IndexedDB...`);
         await saveEpisode({
           category: ep.category,
           theme: ep.theme,
@@ -1069,11 +1084,15 @@ async function retrieveBatch(jobId) {
         });
 
         savedCount++;
-        console.log(`[KidsPodcasts Batch] Episode "${ep.theme}" successfully saved in IndexedDB!`);
+        console.log(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] ✅ Épisode "${ep.theme}" enregistré avec succès dans IndexedDB !`);
       } else {
-        console.error(`[KidsPodcasts Batch] Missing audio for episode "${ep.theme}":`, res?.error);
+        console.error(`[KidsPodcasts Batch] [${i + 1}/${totalEp}] ❌ Échec : aucune donnée audio pour "${ep.theme}". Erreur :`, res?.error || "Inconnu");
       }
     }
+
+    console.log(`[KidsPodcasts Batch] ==========================================`);
+    console.log(`[KidsPodcasts Batch] 🎉 Traitement terminé : ${savedCount}/${totalEp} épisodes sauvegardés.`);
+    console.log(`[KidsPodcasts Batch] Nettoyage du job ${jobId} dans localStorage...`);
 
     deleteBatchJob(jobId);
     await refreshBatchJobsUI();
@@ -1087,11 +1106,11 @@ async function retrieveBatch(jobId) {
       stopBatchPolling();
     }
 
-    showToast(`✨ ${savedCount} épisode${savedCount > 1 ? 's ont' : ' a'} été converti${savedCount > 1 ? 's' : ''} en MP3 et ajouté${savedCount > 1 ? 's' : ''} à votre bibliothèque !`, "success", 5000);
+    showToast(`✨ ${savedCount} épisode${savedCount > 1 ? 's ont' : ' a'} été converti${savedCount > 1 ? 's' : ''} en MP3 et ajouté${savedCount > 1 ? 's' : ''} à votre bibliothèque !`, "success", 6000);
 
   } catch (e) {
-    console.error("[KidsPodcasts Batch] Erreur lors de la récupération:", e);
-    showToast(`Erreur lors de la récupération : ${e.message}`, "error");
+    console.error("[KidsPodcasts Batch] ❌ Erreur critique lors de retrieveBatch:", e);
+    showToast(`Erreur lors de la récupération : ${e.message}`, "error", 6000);
   }
 }
 
